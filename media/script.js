@@ -82,7 +82,7 @@ function createNode(id, title, text, x, y, uri = null) {
             <div class="node-header">${title}</div>
             <div class="node-content-wrapper">
                 <div class="editor-container">
-                    <pre class="code-editor language-none" contenteditable="plaintext-only" spellcheck="false"></pre>
+                    <pre class="code-editor language-none" contenteditable="false" spellcheck="false"></pre>
                 </div>
             </div>
             <div class="handle handle-left" data-handle-id="left"></div>
@@ -94,28 +94,63 @@ function createNode(id, title, text, x, y, uri = null) {
         const header = node.querySelector('.node-header');
         header.addEventListener('mousedown', (e) => {
             e.stopPropagation();
-            draggingNode = node;
-            content.appendChild(node);
+            if (e.target.closest('.node-header')) {
+                draggingNode = node;
+                content.appendChild(node);
 
-            const mouseX = (e.clientX - params.x) / scale;
-            const mouseY = (e.clientY - params.y) / scale;
-            const nodeX = parseFloat(node.style.left);
-            const nodeY = parseFloat(node.style.top);
+                const mouseX = (e.clientX - params.x) / scale;
+                const mouseY = (e.clientY - params.y) / scale;
+                const nodeX = parseFloat(node.style.left);
+                const nodeY = parseFloat(node.style.top);
 
-            nodeOffsetX = mouseX - nodeX;
-            nodeOffsetY = mouseY - nodeY;
+                nodeOffsetX = mouseX - nodeX;
+                nodeOffsetY = mouseY - nodeY;
+            }
+        });
+
+        // Restore logic for Border Handles
+        node.querySelectorAll('.handle').forEach(handle => {
+            handle.addEventListener('mousedown', (e) => {
+                e.stopPropagation();
+                e.preventDefault(); // Prevent text selection
+                const handleId = handle.dataset.handleId;
+                startLinking(node, handleId, e);
+            });
         });
 
         const editor = node.querySelector('.code-editor');
 
-        editor.addEventListener('mousedown', e => e.stopPropagation());
+        editor.addEventListener('mousedown', e => {
+            e.stopPropagation();
+            // Check if we clicked a handle
+            if (e.target.hasAttribute('data-handle-id')) {
+                e.preventDefault(); // Prevent text selection
+                const handleId = e.target.getAttribute('data-handle-id');
+                startLinking(node, handleId, e);
+                return;
+            }
+
+            // If clicking empty area (not a handle) and NOT in edit mode, switch to edit mode
+            if (editor.getAttribute('contenteditable') === 'false') {
+                // Single click on empty area enables edit mode
+                enableEditMode(editor);
+            }
+        });
+
+        editor.addEventListener('dblclick', (e) => {
+            enableEditMode(editor);
+        });
+
+        editor.addEventListener('blur', (e) => {
+            disableEditMode(editor);
+        });
 
         // Input handling with cursor preservation
         editor.addEventListener('input', (e) => {
             handleInput(node, editor);
         });
 
-        // Prevent default enter behavior to avoid extra divs, though plaintext-only handles mostly
+        // Prevent default enter behavior to avoid extra divs
         editor.addEventListener('keydown', (e) => {
             if (e.key === 'Tab') {
                 e.preventDefault();
@@ -539,21 +574,86 @@ window.addEventListener('message', event => {
 
 function activateSymbols(node, symbols) {
     const editor = node.querySelector('.code-editor');
-    // Broaden search to almost any token that might be a symbol or interesting word
-    const tokens = editor.querySelectorAll('.token.function, .token.class-name, .token.keyword, .token.variable, .token.property, .token.constant');
+    // Broaden search to ALL tokens to make every colored word a handle
+    const tokens = editor.querySelectorAll('.token');
+
     tokens.forEach(token => {
-        const name = token.innerText;
-        // Check if it's a known symbol from VS Code
-        const symbol = symbols.find(s => s.name === name);
+        const name = token.innerText.trim();
+        if (!name) return;
+
+        // IGNORE LIST: spaces already trimmed. Ignore structural punctuation.
+        // Allowing keywords, numbers, strings (including quotes), operators like +, -, =, etc.
+        if (/^[\{\}\(\)\[\]\.,;]+$/.test(name)) return;
+
+        // Check if it's a known symbol from VS Code (for better semantic IDs if possible)
+        const symbol = (symbols || []).find(s => s.name === name);
         if (symbol) {
             token.dataset.handleId = `token-${symbol.name}-${Math.random().toString(36).substr(2, 5)}`;
-            token.style.textDecoration = 'underline';
-            token.style.textDecorationStyle = 'dotted';
         } else {
-            // Even if not a VS Code symbol, make it a handle if it's a keyword/word
+            // Generic token handle
             if (!token.dataset.handleId) {
                 token.dataset.handleId = `token-any-${name}-${Math.random().toString(36).substr(2, 5)}`;
             }
         }
     });
+}
+
+function addGenericHandlesToCode(codeElement) {
+    // Only wrap direct text nodes inside the code element (not already in a token span)
+    const walker = document.createTreeWalker(codeElement, NodeFilter.SHOW_TEXT, null, false);
+    let nodesToReplace = [];
+    let node;
+    while (node = walker.nextNode()) {
+        if (node.parentElement === codeElement && node.textContent.trim()) {
+            nodesToReplace.push(node);
+        }
+    }
+
+    nodesToReplace.forEach(textNode => {
+        const span = document.createElement('span');
+        const content = textNode.textContent;
+        // Split by whitespace AND structural punctuation to isolate words
+        // Keeping the separators in the result to reconstruct text
+        span.innerHTML = content.split(/([\{\}\(\)\[\]\.,;\s]+)/).map(part => {
+            // If part is pure whitespace or purely ignored punctuation, just return text
+            if (/^[\{\}\(\)\[\]\.,;\s]+$/.test(part)) return part;
+            // Otherwise it's a word/number/string-part -> Make Handle
+            if (!part.trim()) return part; // Safety
+            return `<span class="word-handle" data-handle-id="word-${part}-${Math.random().toString(36).substr(2, 5)}">${part}</span>`;
+        }).join('');
+        textNode.replaceWith(...span.childNodes);
+    });
+}
+
+function enableEditMode(editor) {
+    if (editor.getAttribute('contenteditable') !== 'plaintext-only') {
+        editor.setAttribute('contenteditable', 'plaintext-only');
+        editor.focus();
+    }
+}
+
+function disableEditMode(editor) {
+    if (editor.getAttribute('contenteditable') !== 'false') {
+        editor.setAttribute('contenteditable', 'false');
+    }
+}
+
+function startLinking(node, handleId, event) {
+    linkingNode = node;
+    linkingHandle = handleId;
+
+    tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    tempLine.setAttribute('class', 'temp-connection');
+    tempLine.setAttribute('stroke', '#007acc');
+    tempLine.setAttribute('stroke-width', '2');
+    tempLine.setAttribute('fill', 'none');
+    svgLayer.appendChild(tempLine);
+
+    // Initial draw
+    const mouseX = (event.clientX - params.x) / scale;
+    const mouseY = (event.clientY - params.y) / scale;
+    const p1 = getHandleCenter(node, handleId);
+
+    // Just a straight line or point initially
+    tempLine.setAttribute('d', `M ${p1.x} ${p1.y} L ${mouseX} ${mouseY}`);
 }

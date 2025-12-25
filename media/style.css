@@ -105,26 +105,40 @@ body.grabbing {
     outline: none;
     color: var(--vscode-editor-foreground);
     background: transparent;
+}
+
+.code-editor[contenteditable="plaintext-only"] {
     cursor: text;
 }
 
-
-/* Token Handles */
-.token.function,
-.token.class-name,
-.token.keyword,
-.word-handle {
-    cursor: crosshair;
-    pointer-events: auto;
-    border-radius: 2px;
-    transition: background 0.1s;
+.code-editor[contenteditable="false"] {
+    cursor: default;
+    /* or move, since we can drag the node? No, default is cleaner inside */
+    user-select: none;
+    /* Prevent text selection in read-only mode */
 }
 
-.token.function:hover,
-.token.class-name:hover,
-.word-handle:hover {
-    background: rgba(255, 255, 255, 0.1);
-    outline: 1px dashed var(--vscode-focusBorder);
+
+/* Interactive Word Handles */
+.code-editor [data-handle-id] {
+    cursor: crosshair;
+    pointer-events: auto;
+    border-radius: 3px;
+
+    /* VISIBILITY SETTINGS: To make invisible later, remove the border and background below */
+    border: 1px solid rgba(100, 149, 237, 0.3);
+    /* Visible blue-ish border */
+    background: rgba(100, 149, 237, 0.05);
+    /* Faint background */
+    transition: all 0.15s ease;
+}
+
+.code-editor [data-handle-id]:hover {
+    background: rgba(100, 149, 237, 0.2);
+    border-color: rgba(100, 149, 237, 0.6);
+    box-shadow: 0 0 0 1px rgba(100, 149, 237, 0.2);
+    z-index: 10;
+    position: relative;
 }
 
 /* Scrollbar styling for a premium look */
