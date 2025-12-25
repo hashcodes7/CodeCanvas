@@ -26,30 +26,27 @@ body.grabbing {
     top: 0;
     left: 0;
     transform-origin: 0 0;
-    /* Will be transformed via JS */
 }
 
 #connections-layer {
     position: absolute;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
+    width: 1px;
+    height: 1px;
     overflow: visible;
     pointer-events: none;
-    /* Let clicks pass through to nodes */
-    z-index: 0;
+    z-index: 100;
 }
 
 .node {
     position: absolute;
-    width: 300px;
-    /* Wider for editing */
-    height: 250px;
-    background-color: var(--vscode-sideBar-background);
+    width: 350px;
+    height: 300px;
+    background-color: var(--vscode-editor-background);
     border: 1px solid var(--vscode-sideBar-border);
     border-radius: 6px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
     z-index: 1;
     display: flex;
     flex-direction: column;
@@ -57,43 +54,92 @@ body.grabbing {
 }
 
 .node-header {
-    padding: 8px;
+    padding: 8px 12px;
     background-color: var(--vscode-titleBar-activeBackground);
     color: var(--vscode-titleBar-activeForeground);
     border-top-left-radius: 6px;
     border-top-right-radius: 6px;
-    font-weight: bold;
+    font-weight: 600;
+    font-size: 12px;
     cursor: move;
     display: flex;
     justify-content: space-between;
     align-items: center;
     flex-shrink: 0;
+    border-bottom: 1px solid var(--vscode-sideBar-border);
 }
 
 .node-content-wrapper {
     flex: 1;
-    display: flex;
-    flex-direction: column;
+    position: relative;
     overflow: hidden;
-    padding: 0;
 }
 
-.node-body {
-    flex: 1;
+/* Layered Editor Styles */
+.editor-container {
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
-    box-sizing: border-box;
-    padding: 10px;
-    font-family: var(--vscode-editor-font-family, monospace);
-    font-size: var(--vscode-editor-font-size, 13px);
-    background-color: var(--vscode-input-background);
-    color: var(--vscode-input-foreground);
-    border: none;
-    resize: none;
-    /* We fix size at node level or let flex handle it */
-    outline: none;
-    white-space: pre;
     overflow: auto;
+    background: transparent;
+}
+
+/* Code Editor - Single Layer ContentEditable */
+.code-editor {
+    display: block;
+    width: 100%;
+    min-height: 100%;
+    margin: 0;
+    padding: 10px;
+    box-sizing: border-box;
+    font-family: var(--vscode-editor-font-family, 'Consolas', 'Monaco', monospace);
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: pre;
+    tab-size: 4;
+    overflow-wrap: normal;
+    word-break: normal;
+    border: none;
+    outline: none;
+    color: var(--vscode-editor-foreground);
+    background: transparent;
+    cursor: text;
+}
+
+
+/* Token Handles */
+.token.function,
+.token.class-name,
+.token.keyword,
+.word-handle {
+    cursor: crosshair;
+    pointer-events: auto;
+    border-radius: 2px;
+    transition: background 0.1s;
+}
+
+.token.function:hover,
+.token.class-name:hover,
+.word-handle:hover {
+    background: rgba(255, 255, 255, 0.1);
+    outline: 1px dashed var(--vscode-focusBorder);
+}
+
+/* Scrollbar styling for a premium look */
+.editor-container::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.editor-container::-webkit-scrollbar-thumb {
+    background: var(--vscode-scrollbarSlider-background);
+    border-radius: 4px;
+}
+
+.editor-container::-webkit-scrollbar-thumb:hover {
+    background: var(--vscode-scrollbarSlider-hoverBackground);
 }
 
 .handle {
@@ -103,23 +149,24 @@ body.grabbing {
     border-radius: 50%;
     position: absolute;
     cursor: crosshair;
-    z-index: 2;
+    z-index: 3;
 }
 
-.handle-out {
+.handle-right {
     right: -5px;
     top: 50%;
     transform: translateY(-50%);
 }
 
-.handle-in {
+.handle-left {
     left: -5px;
     top: 50%;
     transform: translateY(-50%);
 }
 
-path {
+svg path {
     fill: none;
     stroke: var(--vscode-textLink-activeForeground);
     stroke-width: 2px;
+    pointer-events: none;
 }

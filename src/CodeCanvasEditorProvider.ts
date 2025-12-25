@@ -38,6 +38,13 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
         const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(e => {
             if (e.document.uri.toString() === document.uri.toString()) {
                 updateWebview();
+            } else {
+                // Determine if this is a file we might care about (optimisation: could be finer grained)
+                webviewPanel.webview.postMessage({
+                    command: 'fileChanged',
+                    uri: e.document.uri.toString(),
+                    content: e.document.getText()
+                });
             }
         });
 
@@ -47,7 +54,7 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
         });
 
         // Receive message from the webview.
-        webviewPanel.webview.onDidReceiveMessage(e => {
+        webviewPanel.webview.onDidReceiveMessage(async e => {
             switch (e.command) {
                 case 'updateState':
                     this.updateTextDocument(document, e.value);
@@ -59,6 +66,9 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
                 case 'requestNodeContent':
                     // This is for restoring nodes (existing nodes)
                     this._handleNodeContentRequest(webviewPanel.webview, e.uri, e.nodeId);
+                    return;
+                case 'requestSymbols':
+                    this._handleSymbolsRequest(webviewPanel.webview, e.uri, e.nodeId);
                     return;
                 case 'saveFileContent':
                     this._handleSaveFile(e.uri, e.content);
@@ -75,6 +85,8 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
     private getHtmlForWebview(webview: vscode.Webview): string {
         const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'script.js'));
         const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'style.css'));
+        const prismJsUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'prism.js'));
+        const prismCssUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'prism.css'));
 
         const nonce = getNonce();
 
@@ -83,8 +95,9 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} https:; connect-src ${webview.cspSource} https:;">
+                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} https:; connect-src ${webview.cspSource} https:;">
                 <link href="${styleUri}" rel="stylesheet">
+                <link href="${prismCssUri}" rel="stylesheet">
                 <title>CodeCanvas</title>
             </head>
             <body>
@@ -93,6 +106,7 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
                         <svg id="connections-layer"></svg>
                     </div>
                 </div>
+                <script nonce="${nonce}" src="${prismJsUri}"></script>
                 <script nonce="${nonce}" src="${scriptUri}"></script>
             </body>
             </html>`;
@@ -150,6 +164,41 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
                 nodeId: nodeId,
                 content: 'Error loading content: ' + e
             });
+        }
+    }
+
+    private async _handleSymbolsRequest(webview: vscode.Webview, uriString: string, nodeId: string) {
+        try {
+            const uri = vscode.Uri.parse(uriString);
+            const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+                'vscode.executeDocumentSymbolProvider',
+                uri
+            );
+
+            if (symbols) {
+                // Flatten symbols for easier consumption in webview
+                const flattened: any[] = [];
+                const process = (s: vscode.DocumentSymbol) => {
+                    flattened.push({
+                        name: s.name,
+                        kind: s.kind,
+                        range: {
+                            start: s.range.start,
+                            end: s.range.end
+                        }
+                    });
+                    s.children.forEach(process);
+                };
+                symbols.forEach(process);
+
+                webview.postMessage({
+                    command: 'updateSymbols',
+                    nodeId: nodeId,
+                    symbols: flattened
+                });
+            }
+        } catch (e) {
+            console.error('Failed to get symbols:', e);
         }
     }
 

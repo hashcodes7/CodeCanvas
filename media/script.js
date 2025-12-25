@@ -11,6 +11,16 @@ let startX = 0;
 let startY = 0;
 
 let lastStateString = '';
+let nodeSymbols = {}; // nodeId -> symbol list
+let nodes = [];
+let draggingNode = null;
+let nodeOffsetX = 0;
+let nodeOffsetY = 0;
+
+let edges = [];
+let tempLine = null;
+let linkingNode = null;
+let linkingHandle = null;
 
 // Setup infinite canvas
 canvas.addEventListener('mousedown', (e) => {
@@ -22,21 +32,20 @@ canvas.addEventListener('mousedown', (e) => {
     }
 });
 
-window.addEventListener('mousemove', (e) => {
-    if (isPanning) {
-        params.x = e.clientX - startX;
-        params.y = e.clientY - startY;
-        updateTransform();
-    }
-});
+const timeouts = {};
+function debounce(fn, delay, key) {
+    return function () {
+        if (timeouts[key]) clearTimeout(timeouts[key]);
+        timeouts[key] = setTimeout(() => {
+            fn();
+            delete timeouts[key];
+        }, delay);
+    };
+}
 
-window.addEventListener('mouseup', () => {
-    if (isPanning) {
-        isPanning = false;
-        document.body.classList.remove('grabbing');
-        postState();
-    }
-});
+function updateTransform() {
+    content.style.transform = `translate(${params.x}px, ${params.y}px) scale(${scale})`;
+}
 
 canvas.addEventListener('wheel', (e) => {
     if (e.ctrlKey) {
@@ -60,16 +69,7 @@ canvas.addEventListener('wheel', (e) => {
     }
 });
 
-function updateTransform() {
-    content.style.transform = `translate(${params.x}px, ${params.y}px) scale(${scale})`;
-}
-
 // Logic for Nodes
-let nodes = [];
-let draggingNode = null;
-let nodeOffsetX = 0;
-let nodeOffsetY = 0;
-
 function createNode(id, title, text, x, y, uri = null) {
     let node = document.getElementById(id);
     const isNew = !node;
@@ -79,12 +79,14 @@ function createNode(id, title, text, x, y, uri = null) {
         node.className = 'node';
         node.id = id;
         node.innerHTML = `
-            <div class="node-header"></div>
+            <div class="node-header">${title}</div>
             <div class="node-content-wrapper">
-                 <textarea class="node-body" spellcheck="false"></textarea>
+                <div class="editor-container">
+                    <pre class="code-editor language-none" contenteditable="plaintext-only" spellcheck="false"></pre>
+                </div>
             </div>
-            <div class="handle handle-in" data-type="in"></div>
-            <div class="handle handle-out" data-type="out"></div>
+            <div class="handle handle-left" data-handle-id="left"></div>
+            <div class="handle handle-right" data-handle-id="right"></div>
         `;
         content.appendChild(node);
         nodes.push(node);
@@ -93,7 +95,6 @@ function createNode(id, title, text, x, y, uri = null) {
         header.addEventListener('mousedown', (e) => {
             e.stopPropagation();
             draggingNode = node;
-            // Bring to front
             content.appendChild(node);
 
             const mouseX = (e.clientX - params.x) / scale;
@@ -105,80 +106,198 @@ function createNode(id, title, text, x, y, uri = null) {
             nodeOffsetY = mouseY - nodeY;
         });
 
-        const textarea = node.querySelector('textarea');
-        textarea.addEventListener('mousedown', e => e.stopPropagation());
-        textarea.addEventListener('input', () => {
-            if (node.dataset.uri) {
-                debounce(() => {
-                    vscode.postMessage({
-                        command: 'saveFileContent',
-                        uri: node.dataset.uri,
-                        content: textarea.value
-                    });
-                }, 500, node.id + '-save')();
+        const editor = node.querySelector('.code-editor');
+
+        editor.addEventListener('mousedown', e => e.stopPropagation());
+
+        // Input handling with cursor preservation
+        editor.addEventListener('input', (e) => {
+            handleInput(node, editor);
+        });
+
+        // Prevent default enter behavior to avoid extra divs, though plaintext-only handles mostly
+        editor.addEventListener('keydown', (e) => {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                document.execCommand('insertText', false, '    ');
             }
-            debounce(() => postState(), 1000, 'postState')();
         });
     }
 
     node.style.left = `${x}px`;
     node.style.top = `${y}px`;
-    if (uri) node.dataset.uri = uri;
+    if (uri) {
+        node.dataset.uri = uri;
+        const ext = uri.split('.').pop();
+        const langMap = { 'ts': 'typescript', 'js': 'javascript', 'css': 'css', 'html': 'markup' };
+        node.dataset.language = langMap[ext] || 'clike';
+    } else {
+        node.dataset.language = 'none';
+    }
+
     node.querySelector('.node-header').innerText = title;
 
-    const textarea = node.querySelector('textarea');
+    const editor = node.querySelector('.code-editor');
     if (text !== undefined && text !== null) {
-        if (textarea.value !== text) {
-            textarea.value = text;
+        if (editor.innerText !== text) {
+            editor.innerText = text;
+            updateNodeDisplay(node, text, false);
         }
     } else if (uri && isNew) {
-        textarea.value = 'Loading...';
+        editor.innerText = 'Loading...';
     }
 
     return node;
 }
 
-const timeouts = {};
-function debounce(fn, delay, key) {
-    return function () {
-        if (timeouts[key]) clearTimeout(timeouts[key]);
-        timeouts[key] = setTimeout(() => {
-            fn();
-            delete timeouts[key];
-        }, delay);
+function handleInput(node, editor) {
+    const text = editor.innerText;
+    const selection = saveSelection(editor);
+    const uri = node.dataset.uri;
+
+    updateNodeDisplay(node, text);
+    restoreSelection(editor, selection);
+
+    // Optimistic sync: Update ALL other nodes with the same URI
+    if (uri) {
+        document.querySelectorAll(`.node[data-uri="${CSS.escape(uri)}"]`).forEach(otherNode => {
+            if (otherNode.id !== node.id) {
+                const otherEditor = otherNode.querySelector('.code-editor');
+                // Only update if not the one currently being typed in (redundant check but safe)
+                if (otherEditor && document.activeElement !== otherEditor) {
+                    otherEditor.innerText = text;
+                    updateNodeDisplay(otherNode, text, true);
+                }
+            }
+        });
+    }
+
+    if (uri) {
+        debounce(() => {
+            vscode.postMessage({
+                command: 'saveFileContent',
+                uri: uri,
+                content: text
+            });
+        }, 500, uri + '-save')();
+    }
+    debounce(() => postState(), 1000, 'postState')();
+}
+
+// Cursor management
+function saveSelection(containerEl) {
+    const sel = window.getSelection();
+    if (sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        const preSelectionRange = range.cloneRange();
+        preSelectionRange.selectNodeContents(containerEl);
+        preSelectionRange.setEnd(range.endContainer, range.endOffset);
+        const start = preSelectionRange.toString().length;
+        return {
+            start: start - (range.toString().length),
+            end: start
+        };
+    }
+    return { start: 0, end: 0 };
+}
+
+function restoreSelection(containerEl, savedSel) {
+    let charIndex = 0, range = document.createRange();
+    range.setStart(containerEl, 0);
+    range.collapse(true);
+    let nodeStack = [containerEl], node, foundStart = false, stop = false;
+
+    while (!stop && (node = nodeStack.pop())) {
+        if (node.nodeType == 3) {
+            const nextCharIndex = charIndex + node.length;
+            if (!foundStart && savedSel.end >= charIndex && savedSel.end <= nextCharIndex) {
+                range.setEnd(node, savedSel.end - charIndex);
+                stop = true;
+            }
+            if (!foundStart && savedSel.start >= charIndex && savedSel.start <= nextCharIndex) {
+                range.setStart(node, savedSel.start - charIndex);
+                foundStart = true;
+            }
+            charIndex = nextCharIndex;
+        } else {
+            let i = node.childNodes.length;
+            while (i--) {
+                nodeStack.push(node.childNodes[i]);
+            }
+        }
+    }
+
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+}
+
+function updateNodeDisplay(node, text, highlight = true) {
+    const editor = node.querySelector('.code-editor');
+    const lang = node.dataset.language || 'none';
+
+    // update class for Prism
+    editor.className = `code-editor language-${lang}`;
+
+    if (window.Prism) { // Using standard Prism highlights string
+        const grammar = Prism.languages[lang] || Prism.languages.plaintext;
+        const highlighted = Prism.highlight(text, grammar, lang);
+        editor.innerHTML = highlighted + '<br>'; // Trailing BR for editing at end
+
+        // After highlighting, activate handles
+        if (nodeSymbols[node.id]) {
+            activateSymbols(node, nodeSymbols[node.id]);
+        }
+        addGenericHandlesToCode(editor);
+    } else {
+        editor.innerText = text;
+    }
+}
+
+function addGenericHandlesToCode(codeElement) {
+    // Only wrap direct text nodes inside the code element (not already in a token span)
+    const walker = document.createTreeWalker(codeElement, NodeFilter.SHOW_TEXT, null, false);
+    let nodesToReplace = [];
+    let node;
+    while (node = walker.nextNode()) {
+        if (node.parentElement === codeElement && node.textContent.trim()) {
+            nodesToReplace.push(node);
+        }
+    }
+
+    nodesToReplace.forEach(textNode => {
+        const span = document.createElement('span');
+        const content = textNode.textContent;
+        span.innerHTML = content.split(/(\s+)/).map(part => {
+            if (/\s+/.test(part)) return part;
+            return `<span class="word-handle" data-handle-id="word-${part}-${Math.random().toString(36).substr(2, 5)}">${part}</span>`;
+        }).join('');
+        textNode.replaceWith(...span.childNodes);
+    });
+}
+
+function getHandleCenter(node, handleId) {
+    const handle = node.querySelector(`[data-handle-id="${handleId}"]`);
+    if (!handle) return { x: 0, y: 0 };
+
+    const hRect = handle.getBoundingClientRect();
+    const cRect = content.getBoundingClientRect();
+
+    return {
+        x: (hRect.left + hRect.width / 2 - cRect.left) / scale,
+        y: (hRect.top + hRect.height / 2 - cRect.top) / scale
     };
 }
 
-// Global Mouse Move for Node Dragging
-window.addEventListener('mousemove', (e) => {
-    if (draggingNode) {
-        const mouseX = (e.clientX - params.x) / scale;
-        const mouseY = (e.clientY - params.y) / scale;
-
-        draggingNode.style.left = `${mouseX - nodeOffsetX}px`;
-        draggingNode.style.top = `${mouseY - nodeOffsetY}px`;
-
-        updateConnections();
-    }
-});
-
-window.addEventListener('mouseup', () => {
-    if (draggingNode) {
-        draggingNode = null;
-        postState();
-    }
-});
-
-// Linking Logic
-let edges = [];
-let tempLine = null;
-let linkingNode = null;
-
-function createEdge(fromId, toId) {
-    if (fromId === toId) return;
-    if (edges.find(e => e.from === fromId && e.to === toId)) return;
-
-    const edge = { from: fromId, to: toId, id: `edge-${Date.now()}` };
+function createEdge(fromId, fromHandle, toId, toHandle) {
+    if (fromId === toId && fromHandle === toHandle) return;
+    const edge = {
+        from: fromId,
+        fromHandle: fromHandle,
+        to: toId,
+        toHandle: toHandle,
+        id: `edge-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`
+    };
     edges.push(edge);
 
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -192,13 +311,16 @@ function updateEdge(edge) {
     const toNode = document.getElementById(edge.to);
     if (!fromNode || !toNode) return;
 
-    const x1 = parseFloat(fromNode.style.left) + fromNode.offsetWidth;
-    const y1 = parseFloat(fromNode.style.top) + fromNode.offsetHeight / 2;
-    const x2 = parseFloat(toNode.style.left);
-    const y2 = parseFloat(toNode.style.top) + toNode.offsetHeight / 2;
+    const p1 = getHandleCenter(fromNode, edge.fromHandle);
+    const p2 = getHandleCenter(toNode, edge.toHandle);
 
     const path = document.getElementById(edge.id);
     if (path) {
+        const x1 = p1.x;
+        const y1 = p1.y;
+        const x2 = p2.x;
+        const y2 = p2.y;
+
         const c1x = x1 + (x2 - x1) / 2;
         const c1y = y1;
         const c2x = x2 - (x2 - x1) / 2;
@@ -211,29 +333,24 @@ function updateConnections() {
     edges.forEach(updateEdge);
 }
 
-document.addEventListener('mousedown', (e) => {
-    if (e.target.classList.contains('handle-out')) {
-        e.stopPropagation();
-        const node = e.target.closest('.node');
-        linkingNode = node;
-
-        tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        tempLine.style.stroke = 'var(--vscode-textLink-activeForeground)';
-        tempLine.style.strokeDasharray = '5,5';
-        svgLayer.appendChild(tempLine);
-    }
-});
-
 window.addEventListener('mousemove', (e) => {
-    if (linkingNode && tempLine) {
+    if (isPanning) {
+        params.x = e.clientX - startX;
+        params.y = e.clientY - startY;
+        updateTransform();
+    } else if (draggingNode) {
         const mouseX = (e.clientX - params.x) / scale;
         const mouseY = (e.clientY - params.y) / scale;
+        draggingNode.style.left = `${mouseX - nodeOffsetX}px`;
+        draggingNode.style.top = `${mouseY - nodeOffsetY}px`;
+        updateConnections();
+    } else if (linkingNode && tempLine) {
+        const mouseX = (e.clientX - params.x) / scale;
+        const mouseY = (e.clientY - params.y) / scale;
+        const p1 = getHandleCenter(linkingNode, linkingHandle);
 
-        const fromX = parseFloat(linkingNode.style.left) + linkingNode.offsetWidth;
-        const fromY = parseFloat(linkingNode.style.top) + linkingNode.offsetHeight / 2;
-
-        const x1 = fromX;
-        const y1 = fromY;
+        const x1 = p1.x;
+        const y1 = p1.y;
         const x2 = mouseX;
         const y2 = mouseY;
 
@@ -241,32 +358,53 @@ window.addEventListener('mousemove', (e) => {
         const c1y = y1;
         const c2x = x2 - (x2 - x1) / 2;
         const c2y = y2;
-
         tempLine.setAttribute('d', `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}`);
     }
 });
 
 window.addEventListener('mouseup', (e) => {
-    if (linkingNode && tempLine) {
-        if (e.target.classList.contains('handle-in')) {
-            const targetNode = e.target.closest('.node');
-            if (targetNode && targetNode !== linkingNode) {
-                createEdge(linkingNode.id, targetNode.id);
+    if (isPanning) {
+        isPanning = false;
+        document.body.classList.remove('grabbing');
+        postState();
+    } else if (draggingNode) {
+        draggingNode = null;
+        postState();
+    } else if (linkingNode && tempLine) {
+        const targetHandle = e.target.closest('[data-handle-id]');
+        if (targetHandle) {
+            const targetNode = targetHandle.closest('.node');
+            const targetHandleId = targetHandle.dataset.handleId;
+            if (targetNode && (targetNode !== linkingNode || targetHandleId !== linkingHandle)) {
+                createEdge(linkingNode.id, linkingHandle, targetNode.id, targetHandleId);
                 postState();
             }
         }
-
         tempLine.remove();
         tempLine = null;
         linkingNode = null;
+        linkingHandle = null;
     }
 });
 
-document.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
+document.addEventListener('mousedown', (e) => {
+    const handle = e.target.closest('[data-handle-id]');
+    if (handle) {
+        e.stopPropagation();
+        const node = handle.closest('.node');
+        linkingNode = node;
+        linkingHandle = handle.dataset.handleId;
+
+        tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        tempLine.setAttribute('stroke', 'var(--vscode-textLink-activeForeground)');
+        tempLine.setAttribute('stroke-width', '2');
+        tempLine.setAttribute('fill', 'none');
+        tempLine.style.strokeDasharray = '5,5';
+        svgLayer.appendChild(tempLine);
+    }
 });
 
+document.addEventListener('dragover', e => e.preventDefault());
 document.addEventListener('drop', (e) => {
     e.preventDefault();
     const uriList = e.dataTransfer.getData('text/uri-list');
@@ -280,33 +418,23 @@ document.addEventListener('drop', (e) => {
                 y: (e.clientY - params.y) / scale
             });
         });
-        return;
     }
-
-    vscode.postMessage({
-        command: 'alert',
-        text: 'Please drop files from the VS Code Explorer.'
-    });
 });
 
 function getState() {
-    const nodesData = nodes.map(node => {
-        return {
-            id: node.id,
-            title: node.querySelector('.node-header').innerText,
-            uri: node.dataset.uri,
-            text: node.dataset.uri ? null : node.querySelector('textarea').value,
-            x: parseFloat(node.style.left),
-            y: parseFloat(node.style.top)
-        };
-    });
-
     return {
-        version: 1,
-        params: { ...params },
-        scale: scale,
-        nodes: nodesData,
-        edges: edges
+        version: 3,
+        params,
+        scale,
+        nodes: nodes.map(n => ({
+            id: n.id,
+            title: n.querySelector('.node-header').innerText,
+            uri: n.dataset.uri,
+            text: n.querySelector('.code-editor').innerText, // FIXED: removed .value check
+            x: parseFloat(n.style.left),
+            y: parseFloat(n.style.top)
+        })),
+        edges
     };
 }
 
@@ -320,7 +448,6 @@ function restoreStateFixed(state) {
     if (state.scale) scale = state.scale;
     updateTransform();
 
-    // Remove nodes that are no longer in state
     const stateNodeIds = new Set((state.nodes || []).map(n => n.id));
     nodes = nodes.filter(node => {
         if (!stateNodeIds.has(node.id)) {
@@ -334,16 +461,13 @@ function restoreStateFixed(state) {
         state.nodes.forEach(n => {
             createNode(n.id, n.title, n.text, n.x, n.y, n.uri);
             if (n.uri && !document.getElementById(n.id).dataset.loaded) {
-                vscode.postMessage({
-                    command: 'requestNodeContent',
-                    uri: n.uri,
-                    nodeId: n.id
-                });
+                vscode.postMessage({ command: 'requestNodeContent', uri: n.uri, nodeId: n.id });
+                vscode.postMessage({ command: 'requestSymbols', uri: n.uri, nodeId: n.id });
+                document.getElementById(n.id).dataset.loaded = 'true';
             }
         });
     }
 
-    // Update edges
     document.querySelectorAll('path:not([style*="stroke-dasharray"])').forEach(p => p.remove());
     edges = [];
     if (state.edges) {
@@ -362,45 +486,74 @@ function postState() {
     const stateString = JSON.stringify(state);
     if (stateString === lastStateString) return;
     lastStateString = stateString;
-    vscode.postMessage({
-        command: 'updateState',
-        value: state
-    });
+    vscode.postMessage({ command: 'updateState', value: state });
 }
 
 window.addEventListener('message', event => {
     const message = event.data;
     switch (message.command) {
         case 'addNode':
-            const { fileName, content, x, y, uri } = message;
             const id = 'node-' + Date.now() + Math.random().toString(36).substr(2, 9);
-            createNode(id, fileName, content, x, y, uri);
-            const node = document.getElementById(id);
-            if (uri) node.dataset.loaded = 'true';
+            createNode(id, message.fileName, message.content, message.x, message.y, message.uri);
+            document.getElementById(id).dataset.loaded = 'true';
+            if (message.uri) vscode.postMessage({ command: 'requestSymbols', uri: message.uri, nodeId: id });
             postState();
             break;
         case 'updateNodeContent':
-            const { nodeId, content: newContent } = message;
-            const n = document.getElementById(nodeId);
+            const n = document.getElementById(message.nodeId);
             if (n) {
-                const textarea = n.querySelector('textarea');
-                if (textarea.value !== newContent) {
-                    textarea.value = newContent;
+                const editor = n.querySelector('.code-editor');
+                if (document.activeElement !== editor) {
+                    editor.innerText = message.content;
+                    updateNodeDisplay(n, message.content, true);
+                    n.dataset.loaded = 'true';
                 }
-                n.dataset.loaded = 'true';
             }
             break;
+        case 'updateSymbols':
+            nodeSymbols[message.nodeId] = message.symbols;
+            const node = document.getElementById(message.nodeId);
+            if (node) activateSymbols(node, message.symbols);
+            break;
+        case 'fileChanged':
+            // Backend reports a file change (could be from another editor tab or this extension saving)
+            const changedUri = message.uri;
+            const newContent = message.content;
+            document.querySelectorAll(`.node[data-uri="${CSS.escape(changedUri)}"]`).forEach(n => {
+                const editor = n.querySelector('.code-editor');
+                // Only update if we are NOT the one typing (avoid overwriting cursor)
+                if (document.activeElement !== editor) {
+                    if (editor.innerText !== newContent) {
+                        editor.innerText = newContent;
+                        updateNodeDisplay(n, newContent, true);
+                    }
+                }
+            });
+            break;
         case 'setValue':
-            if (!message.value) {
-                restoreStateFixed({});
-                return;
-            }
-            try {
-                const state = JSON.parse(message.value);
-                restoreStateFixed(state);
-            } catch (e) {
-                console.error('Failed to parse state:', e);
-            }
+            if (!message.value) { restoreStateFixed({}); return; }
+            try { restoreStateFixed(JSON.parse(message.value)); } catch (e) { }
             break;
     }
 });
+
+function activateSymbols(node, symbols) {
+    const editor = node.querySelector('.code-editor');
+    // Broaden search to almost any token that might be a symbol or interesting word
+    const tokens = editor.querySelectorAll('.token.function, .token.class-name, .token.keyword, .token.variable, .token.property, .token.constant');
+    tokens.forEach(token => {
+        const name = token.innerText;
+        // Check if it's a known symbol from VS Code
+        const symbol = symbols.find(s => s.name === name);
+        if (symbol) {
+            token.dataset.handleId = `token-${symbol.name}-${Math.random().toString(36).substr(2, 5)}`;
+            token.style.textDecoration = 'underline';
+            token.style.textDecorationStyle = 'dotted';
+        } else {
+            // Even if not a VS Code symbol, make it a handle if it's a keyword/word
+            if (!token.dataset.handleId) {
+                token.dataset.handleId = `token-any-${name}-${Math.random().toString(36).substr(2, 5)}`;
+            }
+        }
+    });
+}
