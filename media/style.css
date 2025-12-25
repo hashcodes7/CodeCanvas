@@ -177,11 +177,9 @@ body.grabbing {
     pointer-events: auto;
     border-radius: 3px;
 
-    /* VISIBILITY SETTINGS: To make invisible later, remove the border and background below */
-    border: 1px solid rgba(100, 149, 237, 0.3);
-    /* Visible blue-ish border */
-    background: rgba(100, 149, 237, 0.05);
-    /* Faint background */
+    /* VISIBILITY SETTINGS: Hidden by default, visible on hover */
+    border: 1px solid transparent;
+    background: transparent;
     transition: all 0.15s ease;
 }
 

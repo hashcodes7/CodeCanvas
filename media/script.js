@@ -663,9 +663,11 @@ function activateSymbols(node, symbols) {
         const name = token.innerText.trim();
         if (!name) return;
 
-        // IGNORE LIST: spaces already trimmed. Ignore structural punctuation.
-        // Allowing keywords, numbers, strings (including quotes), operators like +, -, =, etc.
-        if (/^[\{\}\(\)\[\]\.,;]+$/.test(name)) return;
+        // EXCLUSION LIST:
+        // Text/Tokens matching specifically these characters (or combinations of them) will NOT be handles.
+        // User List: ()[]{}:;,./|\ and space
+        // Regex logic: matches if string consists ONLY of these characters range.
+        if (/^[\(\)\[\]\{\}:;,.\/\|\\]+$/.test(name)) return;
 
         // Check if it's a known symbol from VS Code (for better semantic IDs if possible)
         const symbol = (symbols || []).find(s => s.name === name);
@@ -694,11 +696,11 @@ function addGenericHandlesToCode(codeElement) {
     nodesToReplace.forEach(textNode => {
         const span = document.createElement('span');
         const content = textNode.textContent;
-        // Split by whitespace AND structural punctuation to isolate words
-        // Keeping the separators in the result to reconstruct text
-        span.innerHTML = content.split(/([\{\}\(\)\[\]\.,;\s]+)/).map(part => {
-            // If part is pure whitespace or purely ignored punctuation, just return text
-            if (/^[\{\}\(\)\[\]\.,;\s]+$/.test(part)) return part;
+        // Split by whitespace AND user-defined structural punctuation
+        // Explicitly include all items from the exclusion list as separators
+        span.innerHTML = content.split(/([\(\)\[\]\{\}:;,.\/\|\s\\]+)/).map(part => {
+            // Check if part is purely whitespace or exclusion characters
+            if (/^[\(\)\[\]\{\}:;,.\/\|\s\\]+$/.test(part)) return part;
             // Otherwise it's a word/number/string-part -> Make Handle
             if (!part.trim()) return part; // Safety
             return `<span class="word-handle" data-handle-id="word-${part}-${Math.random().toString(36).substr(2, 5)}">${part}</span>`;
