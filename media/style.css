@@ -55,16 +55,20 @@ body.grabbing {
 
 .node-header {
     padding: 8px 12px;
-    background-color: var(--vscode-titleBar-activeBackground);
-    color: var(--vscode-titleBar-activeForeground);
+    background: var(--vscode-sideBarSectionHeader-background);
+    color: var(--vscode-sideBarSectionHeader-foreground);
     border-top-left-radius: 6px;
     border-top-right-radius: 6px;
+    border-bottom: 1px solid var(--vscode-widget-border);
+    cursor: grab;
     font-weight: 600;
-    font-size: 12px;
-    cursor: move;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 10px;
+    height: 36px;
+    /* Fixed height for consistency */
+    font-size: 12px;
     flex-shrink: 0;
     border-bottom: 1px solid var(--vscode-sideBar-border);
 }

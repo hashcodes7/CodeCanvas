@@ -9,7 +9,9 @@
     "categories": [
         "Other"
     ],
-    "activationEvents": [],
+    "activationEvents": [
+        "onCustomEditor:codecanvas.codeCanvas"
+    ],
     "main": "./out/extension.js",
     "contributes": {
         "customEditors": [

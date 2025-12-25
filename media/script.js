@@ -21,10 +21,59 @@ let edges = [];
 let tempLine = null;
 let linkingNode = null;
 let linkingHandle = null;
+let selectedNode = null;
+
+function deleteNode(nodeId) {
+    const nodeIndex = nodes.findIndex(n => n.id === nodeId);
+    if (nodeIndex === -1) return;
+
+    // Remove node element
+    const node = result = document.getElementById(nodeId);
+    if (node) node.remove();
+
+    // Remove from array
+    nodes.splice(nodeIndex, 1);
+
+    // Remove connected edges
+    edges = edges.filter(edge => {
+        if (edge.from === nodeId || edge.to === nodeId) {
+            const el = document.getElementById(edge.id);
+            if (el) el.remove();
+            return false;
+        }
+        return true;
+    });
+
+    if (selectedNode && selectedNode.id === nodeId) {
+        selectedNode = null;
+    }
+
+    delete nodeSymbols[nodeId];
+
+    postState();
+}
+
+// Global Keydown for Deletion
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+        // Do not delete if editing text/input
+        const tag = document.activeElement.tagName.toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || document.activeElement.isContentEditable) return;
+
+        if (selectedNode) {
+            deleteNode(selectedNode.id);
+        }
+    }
+});
 
 // Setup infinite canvas
 canvas.addEventListener('mousedown', (e) => {
+    // Deselect if clicking canvas
     if (e.target === canvas || e.target === content) {
+        if (selectedNode) {
+            selectedNode.classList.remove('selected');
+            selectedNode = null;
+        }
         isPanning = true;
         startX = e.clientX - params.x;
         startY = e.clientY - params.y;
@@ -78,8 +127,21 @@ function createNode(id, title, text, x, y, uri = null) {
         node = document.createElement('div');
         node.className = 'node';
         node.id = id;
+
+        // Determine language for display
+        let langDisplay = 'Text';
+        if (uri) {
+            const ext = uri.split('.').pop();
+            const titleMap = { 'ts': 'TypeScript', 'js': 'JavaScript', 'css': 'CSS', 'html': 'HTML' };
+            langDisplay = titleMap[ext] || ext.toUpperCase();
+        }
+
         node.innerHTML = `
-            <div class="node-header">${title}</div>
+            <div class="node-header">
+                <span class="node-title">${title}</span>
+                <span class="node-lang">${langDisplay}</span>
+                <div class="delete-btn" title="Delete Node">🗑️</div>
+            </div>
             <div class="node-content-wrapper">
                 <div class="editor-container">
                     <pre class="code-editor language-none" contenteditable="false" spellcheck="false"></pre>
@@ -92,11 +154,31 @@ function createNode(id, title, text, x, y, uri = null) {
         nodes.push(node);
 
         const header = node.querySelector('.node-header');
+
+        // Delete Button Logic
+        const deleteBtn = node.querySelector('.delete-btn');
+        deleteBtn.addEventListener('mousedown', (e) => {
+            e.stopPropagation(); // Prevent drag start
+        });
+        deleteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteNode(id);
+        });
+
+        // Header Drag + Selection Logic
         header.addEventListener('mousedown', (e) => {
             e.stopPropagation();
+
+            // Select Node
+            if (selectedNode && selectedNode !== node) {
+                selectedNode.classList.remove('selected');
+            }
+            selectedNode = node;
+            node.classList.add('selected');
+
             if (e.target.closest('.node-header')) {
                 draggingNode = node;
-                content.appendChild(node);
+                content.appendChild(node); // Bring to front
 
                 const mouseX = (e.clientX - params.x) / scale;
                 const mouseY = (e.clientY - params.y) / scale;
@@ -170,7 +252,7 @@ function createNode(id, title, text, x, y, uri = null) {
         node.dataset.language = 'none';
     }
 
-    node.querySelector('.node-header').innerText = title;
+    node.querySelector('.node-title').innerText = title;
 
     const editor = node.querySelector('.code-editor');
     if (text !== undefined && text !== null) {
@@ -463,7 +545,7 @@ function getState() {
         scale,
         nodes: nodes.map(n => ({
             id: n.id,
-            title: n.querySelector('.node-header').innerText,
+            title: n.querySelector('.node-title').innerText,
             uri: n.dataset.uri,
             text: n.querySelector('.code-editor').innerText, // FIXED: removed .value check
             x: parseFloat(n.style.left),
