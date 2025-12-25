@@ -140,7 +140,7 @@ function createNode(id, title, text, x, y, uri = null) {
             <div class="node-header">
                 <span class="node-title">${title}</span>
                 <span class="node-lang">${langDisplay}</span>
-                <div class="delete-btn" title="Delete Node">🗑️</div>
+                <div class="delete-btn" title="Delete Node">×</div>
             </div>
             <div class="node-content-wrapper">
                 <div class="editor-container">
