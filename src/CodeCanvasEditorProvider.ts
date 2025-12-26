@@ -118,45 +118,55 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
                     </div>
                 </div>
 
-                <div id="edge-toolbar" class="edge-toolbar hidden">
-                    <div class="toolbar-section">
-                        <i class="bi bi-distribute-vertical" title="Thickness"></i>
-                        <input type="range" id="edge-thickness" min="0.5" max="10" step="0.5" value="1">
-                        <span id="thickness-label">1px</span>
-                    </div>
-                    <div class="toolbar-divider"></div>
-                    <div class="toolbar-section">
-                        <i class="bi bi-palette" title="Color"></i>
-                        <div class="color-swatches">
-                            <div class="swatch default active" data-color="default" title="Default Color"></div>
-                            <div class="swatch red" data-color="#ff5f56" title="Red"></div>
-                            <div class="swatch green" data-color="#28c840" title="Green"></div>
-                            <div class="swatch yellow" data-color="#febc2e" title="Yellow"></div>
-                            <div class="swatch purple" data-color="#af52de" title="Purple"></div>
-                            <div class="swatch white" data-color="#ffffff" title="White"></div>
+                <div id="main-toolbar" class="main-toolbar">
+                    <div id="global-tools" class="toolbar-section">
+                        <div class="toolbar-btn" id="add-text-btn" title="Add Text Block">
+                            <i class="bi bi-plus-lg"></i>
                         </div>
-                    </div>  
-                    <div class="toolbar-divider"></div>
-                    <div class="toolbar-section unlink-btn" id="unlink-btn" title="Unlink Connection">
-                        <i class="fas fa-link-slash"></i>
-                        <span>Unlink</span>
                     </div>
-                </div>
 
-                <div id="node-toolbar" class="node-toolbar hidden">
-                    <div class="toolbar-section node-duplicate-btn" id="node-duplicate-btn" title="Duplicate Node">
-                        <i class="bi bi-copy"></i>
-                        <span>Duplicate</span>
+                    <div id="edge-options" class="toolbar-group hidden">
+                        <div class="toolbar-divider"></div>
+                        <div class="toolbar-section">
+                            <i class="bi bi-distribute-vertical" title="Thickness"></i>
+                            <input type="range" id="edge-thickness" min="0.5" max="10" step="0.5" value="1">
+                            <span id="thickness-label">1px</span>
+                        </div>
+                        <div class="toolbar-divider"></div>
+                        <div class="toolbar-section">
+                            <i class="bi bi-palette" title="Color"></i>
+                            <div class="color-swatches">
+                                <div class="swatch default active" data-color="default" title="Default Color"></div>
+                                <div class="swatch red" data-color="#ff5f56" title="Red"></div>
+                                <div class="swatch green" data-color="#28c840" title="Green"></div>
+                                <div class="swatch yellow" data-color="#febc2e" title="Yellow"></div>
+                                <div class="swatch purple" data-color="#af52de" title="Purple"></div>
+                                <div class="swatch white" data-color="#ffffff" title="White"></div>
+                            </div>
+                        </div>  
+                         <div class="toolbar-divider"></div>
+                        <div class="toolbar-section unlink-btn" id="unlink-btn" title="Unlink Connection">
+                            <i class="fas fa-link-slash"></i>
+                            <span>Unlink</span>
+                        </div>
                     </div>
-                    <div class="toolbar-divider"></div>
-                    <div class="toolbar-section node-unlink-btn" id="node-unlink-all-btn" title="Unlink All Connections">
-                        <i class="fas fa-link-slash"></i>
-                        <span>Unlink All</span>
-                    </div>
-                    <div class="toolbar-divider"></div>
-                    <div class="toolbar-section node-delete-btn" id="node-delete-btn-toolbar" title="Delete Node">
-                        <i class="fas fa-trash-can"></i>
-                        <span>Delete</span>
+
+                    <div id="node-options" class="toolbar-group hidden">
+                        <div class="toolbar-divider"></div>
+                        <div class="toolbar-section node-duplicate-btn" id="node-duplicate-btn" title="Duplicate Node">
+                            <i class="bi bi-copy"></i>
+                            <span>Duplicate</span>
+                        </div>
+                        <div class="toolbar-divider"></div>
+                        <div class="toolbar-section node-unlink-btn" id="node-unlink-all-btn" title="Unlink All Connections">
+                            <i class="fas fa-link-slash"></i>
+                            <span>Unlink All</span>
+                        </div>
+                        <div class="toolbar-divider"></div>
+                        <div class="toolbar-section node-delete-btn" id="node-delete-btn-toolbar" title="Delete Node">
+                            <i class="fas fa-trash-can"></i>
+                            <span>Delete</span>
+                        </div>
                     </div>
                 </div>
 

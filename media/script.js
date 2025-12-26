@@ -31,13 +31,17 @@ let canvasSettings = {
 };
 
 // Toolbar Elements
-const edgeToolbar = document.getElementById('edge-toolbar');
+// Toolbar Elements
+const edgeOptions = document.getElementById('edge-options');
+const nodeOptions = document.getElementById('node-options');
 const thicknessSlider = document.getElementById('edge-thickness');
 const thicknessLabel = document.getElementById('thickness-label');
 const unlinkBtn = document.getElementById('unlink-btn');
 
+// Global Tools
+const addTextBtn = document.getElementById('add-text-btn');
+
 // Node Toolbar Elements
-const nodeToolbar = document.getElementById('node-toolbar');
 const nodeDuplicateBtn = document.getElementById('node-duplicate-btn');
 const nodeUnlinkAllBtn = document.getElementById('node-unlink-all-btn');
 const nodeDeleteBtnToolbar = document.getElementById('node-delete-btn-toolbar');
@@ -47,6 +51,20 @@ const settingsBtn = document.getElementById('settings-btn');
 const settingsMenu = document.getElementById('settings-menu');
 const patternOpts = document.querySelectorAll('.pattern-opt');
 const themeOpts = document.querySelectorAll('.theme-opt');
+
+// Add Text Button Logic
+addTextBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const id = 'node-' + Date.now() + Math.random().toString(36).substr(2, 9);
+    // Center of the view, adjusted for scale
+    // canvas center (approx) relative to transform
+    const rect = canvas.getBoundingClientRect();
+    const cx = ((rect.width / 2) - params.x) / scale - 175; // -half node width
+    const cy = ((rect.height / 2) - params.y) / scale - 150; // -half node height
+
+    createNode(id, 'Text Block', 'Enter text...', cx, cy, null);
+    postState();
+});
 
 function deleteEdge(edgeId) {
     const edgeIndex = edges.findIndex(e => e.id === edgeId);
@@ -59,7 +77,7 @@ function deleteEdge(edgeId) {
 
     if (selectedEdge && selectedEdge.id === edgeId) {
         selectedEdge = null;
-        edgeToolbar.classList.add('hidden');
+        edgeOptions.classList.add('hidden');
     }
 
     postState();
@@ -88,6 +106,7 @@ function deleteNode(nodeId) {
 
     if (selectedNode && selectedNode.id === nodeId) {
         selectedNode = null;
+        nodeOptions.classList.add('hidden');
     }
 
     delete nodeSymbols[nodeId];
@@ -131,9 +150,9 @@ function deselectEverything() {
         const path = document.getElementById(selectedEdge.id);
         if (path) path.classList.remove('selected');
         selectedEdge = null;
-        edgeToolbar.classList.add('hidden');
+        edgeOptions.classList.add('hidden');
     }
-    nodeToolbar.classList.add('hidden');
+    nodeOptions.classList.add('hidden');
 }
 
 function selectEdge(edgeId) {
@@ -151,7 +170,7 @@ function selectEdge(edgeId) {
         const activeSwatch = document.querySelector(`.swatch[data-color="${selectedEdge.color || 'default'}"]`);
         if (activeSwatch) activeSwatch.classList.add('active');
 
-        edgeToolbar.classList.remove('hidden');
+        edgeOptions.classList.remove('hidden');
     }
 }
 
@@ -255,7 +274,7 @@ function createNode(id, title, text, x, y, uri = null) {
             deselectEverything();
             selectedNode = node;
             node.classList.add('selected');
-            nodeToolbar.classList.remove('hidden');
+            nodeOptions.classList.remove('hidden');
 
             if (e.target.closest('.node-header')) {
                 draggingNode = node;
@@ -350,7 +369,12 @@ function createNode(id, title, text, x, y, uri = null) {
 }
 
 function handleInput(node, editor) {
-    const text = editor.innerText;
+    let text = editor.innerText;
+    // Fix: innerText often includes a trailing newline due to block formatting or <br>.
+    // ensuring we don't accumulate newlines on every input.
+    if (text.endsWith('\n')) {
+        text = text.slice(0, -1);
+    }
     const selection = saveSelection(editor);
     const uri = node.dataset.uri;
 
@@ -583,7 +607,7 @@ function duplicateNode(nodeId) {
         deselectEverything();
         selectedNode = newNode;
         newNode.classList.add('selected');
-        nodeToolbar.classList.remove('hidden');
+        nodeOptions.classList.remove('hidden');
     }
 
     postState();

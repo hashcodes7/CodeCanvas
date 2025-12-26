@@ -422,8 +422,7 @@ svg path.selected {
     filter: drop-shadow(0 0 5px var(--vscode-focusBorder));
 }
 
-.edge-toolbar,
-.node-toolbar {
+.main-toolbar {
     position: fixed;
     bottom: 50px;
     left: 50%;
@@ -442,9 +441,33 @@ svg path.selected {
     transition: opacity 0.2s, transform 0.2s;
 }
 
-.edge-toolbar.hidden,
-.node-toolbar.hidden {
+.toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.toolbar-group.hidden {
     display: none;
+}
+
+.toolbar-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 16px;
+    transition: transform 0.2s, background-color 0.2s;
+}
+
+.toolbar-btn:hover {
+    transform: scale(1.1);
+    background-color: var(--vscode-button-hoverBackground);
 }
 
 .toolbar-section {
