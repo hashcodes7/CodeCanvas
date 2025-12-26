@@ -278,18 +278,19 @@ body.grabbing {
     overflow: auto;
     background: transparent;
     display: flex;
+    align-items: stretch;
 }
 
 .line-numbers {
-    padding: 10px 5px;
+    padding: 10px 0;
     border-right: 1px solid var(--vscode-widget-border);
     background: var(--vscode-editor-background);
     color: var(--vscode-editorLineNumber-foreground, #858585);
-    font-family: var(--vscode-editor-font-family, 'Consolas', 'Monaco', monospace);
-    font-size: 13px;
-    line-height: 1.5;
+    font-family: var(--vscode-editor-font-family, 'Consolas', 'Monaco', monospace) !important;
+    font-size: 13px !important;
+    line-height: 20px !important;
     text-align: right;
-    min-width: 30px;
+    min-width: 32px;
     user-select: none;
     display: flex;
     flex-direction: column;
@@ -297,22 +298,27 @@ body.grabbing {
     position: sticky;
     left: 0;
     z-index: 5;
+    margin: 0 !important;
 }
 
 .line-numbers span {
     display: block;
+    padding: 0 6px;
+    height: 20px;
 }
 
 /* Code Editor - Single Layer ContentEditable */
 .code-editor {
     display: block;
     flex: 1;
-    margin: 0;
-    padding: 10px;
+    margin: 0 !important;
+    /* !important needed to override Prism's pre padding: 0 */
+    padding: 10px !important;
+    padding-left: 10px !important;
     box-sizing: border-box;
-    font-family: var(--vscode-editor-font-family, 'Consolas', 'Monaco', monospace);
-    font-size: 13px;
-    line-height: 1.5;
+    font-family: var(--vscode-editor-font-family, 'Consolas', 'Monaco', monospace) !important;
+    font-size: 13px !important;
+    line-height: 20px !important;
     white-space: pre;
     tab-size: 4;
     overflow-wrap: normal;
