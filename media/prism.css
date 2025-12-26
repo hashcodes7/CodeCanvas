@@ -1,6 +1,6 @@
 code[class*=language-],
 pre[class*=language-] {
-    color: #ccc;
+    color: #df6666;
     background: 0 0;
     font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
     font-size: 1em;
@@ -41,11 +41,11 @@ pre[class*=language-] {
 .token.comment,
 .token.doctype,
 .token.prolog {
-    color: #999
+    color: #55bcdb
 }
 
 .token.punctuation {
-    color: #ccc
+    color: #6668f3
 }
 
 .token.attr-name,

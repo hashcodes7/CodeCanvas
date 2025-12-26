@@ -25,9 +25,11 @@ let selectedNode = null;
 let selectedEdge = null;
 
 // Settings State
+// Settings State
 let canvasSettings = {
     pattern: 'plain',
-    theme: 'none'
+    theme: 'none',
+    syntaxTheme: 'default'
 };
 
 // Toolbar Elements
@@ -806,6 +808,7 @@ function restoreStateFixed(state) {
         canvasSettings = state.settings;
         applyPattern(canvasSettings.pattern);
         applyTheme(canvasSettings.theme);
+        applySyntaxTheme(canvasSettings.syntaxTheme);
     }
 }
 
@@ -1020,3 +1023,26 @@ themeOpts.forEach(opt => {
 });
 
 const settingsContainer = document.querySelector('.settings-container');
+const syntaxThemeSelect = document.getElementById('syntax-theme-select');
+
+function applySyntaxTheme(theme) {
+    if (!theme) theme = 'default';
+    canvasSettings.syntaxTheme = theme;
+
+    // Switch the stylesheet href
+    const themeLink = document.getElementById('prism-theme-style');
+    const newHref = window.prismThemes[theme] || window.prismThemes['default'];
+
+    if (themeLink && newHref && themeLink.getAttribute('href') !== newHref) {
+        themeLink.setAttribute('href', newHref);
+    }
+
+    if (syntaxThemeSelect) {
+        syntaxThemeSelect.value = theme;
+    }
+}
+
+syntaxThemeSelect.addEventListener('change', (e) => {
+    applySyntaxTheme(e.target.value);
+    postState();
+});

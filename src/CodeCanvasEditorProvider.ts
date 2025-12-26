@@ -95,7 +95,13 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
         const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'script.js'));
         const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'style.css'));
         const prismJsUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'prism.js'));
-        const prismCssUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'prism.css'));
+
+        // Theme URIs
+        const prismDefaultUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'prism.css'));
+        const prismSolarizedUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'prism-solarized.css'));
+        const prismOkaidiaUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'prism-okaidia.css'));
+        const prismTomorrowUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'prism-tomorrow.css'));
+        const prismTwilightUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'prism-twilight.css'));
 
         const nonce = getNonce();
 
@@ -106,10 +112,19 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline' https:; font-src https:; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} https:; connect-src ${webview.cspSource} https:;">
                 <link href="${styleUri}" rel="stylesheet">
-                <link href="${prismCssUri}" rel="stylesheet">
+                <link id="prism-theme-style" href="${prismDefaultUri}" rel="stylesheet">
                 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
                 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
                 <title>CodeCanvas</title>
+                <script nonce="${nonce}">
+                    window.prismThemes = {
+                        default: "${prismDefaultUri}",
+                        solarized: "${prismSolarizedUri}",
+                        okaidia: "${prismOkaidiaUri}",
+                        tomorrow: "${prismTomorrowUri}",
+                        twilight: "${prismTwilightUri}"
+                    };
+                </script>
             </head>
             <body>
                 <div id="canvas-container">
@@ -192,6 +207,17 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
                                 <button class="theme-opt" data-theme="dark"><i class="bi bi-moon-stars-fill"></i> Dark</button>
                                 <button class="theme-opt" data-theme="light"><i class="bi bi-sun-fill"></i> Light</button>
                             </div>
+                        </div>
+                        <div class="menu-divider"></div>
+                        <div class="menu-group">
+                            <label>Syntax Theme</label>
+                            <select id="syntax-theme-select" class="theme-select">
+                                <option value="default">Default</option>
+                                <option value="solarized">Solarized</option>
+                                <option value="okaidia">Okaidia</option>
+                                <option value="tomorrow">Tomorrow Night</option>
+                                <option value="twilight">Twilight</option>
+                            </select>
                         </div>
                     </div>
                 </div>

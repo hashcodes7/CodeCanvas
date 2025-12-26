@@ -138,9 +138,29 @@ body.grabbing {
 }
 
 .pattern-opt:hover,
-.theme-opt:hover {
+.theme-opt:hover,
+.theme-select:hover {
     background: var(--vscode-button-secondaryHoverBackground);
 }
+
+.theme-select {
+    width: 100%;
+    background: var(--vscode-dropdown-background);
+    color: var(--vscode-dropdown-foreground);
+    border: 1px solid var(--vscode-dropdown-border);
+    border-radius: 4px;
+    padding: 6px;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    outline: none;
+}
+
+.theme-select:focus {
+    border-color: var(--vscode-focusBorder);
+}
+
+
 
 .pattern-opt.active,
 .theme-opt.active {
