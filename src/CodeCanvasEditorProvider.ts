@@ -95,9 +95,11 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} https:; connect-src ${webview.cspSource} https:;">
+                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline' https:; font-src https:; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} https:; connect-src ${webview.cspSource} https:;">
                 <link href="${styleUri}" rel="stylesheet">
                 <link href="${prismCssUri}" rel="stylesheet">
+                <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+                <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
                 <title>CodeCanvas</title>
             </head>
             <body>
@@ -106,6 +108,75 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
                         <svg id="connections-layer"></svg>
                     </div>
                 </div>
+
+                <div id="edge-toolbar" class="edge-toolbar hidden">
+                    <div class="toolbar-section">
+                        <i class="bi bi-distribute-vertical" title="Thickness"></i>
+                        <input type="range" id="edge-thickness" min="0.5" max="10" step="0.5" value="1">
+                        <span id="thickness-label">1px</span>
+                    </div>
+                    <div class="toolbar-divider"></div>
+                    <div class="toolbar-section">
+                        <i class="bi bi-palette" title="Color"></i>
+                        <div class="color-swatches">
+                            <div class="swatch default active" data-color="default" title="Default Color"></div>
+                            <div class="swatch red" data-color="#ff5f56" title="Red"></div>
+                            <div class="swatch green" data-color="#28c840" title="Green"></div>
+                            <div class="swatch yellow" data-color="#febc2e" title="Yellow"></div>
+                            <div class="swatch purple" data-color="#af52de" title="Purple"></div>
+                            <div class="swatch white" data-color="#ffffff" title="White"></div>
+                        </div>
+                    </div>  
+                    <div class="toolbar-divider"></div>
+                    <div class="toolbar-section unlink-btn" id="unlink-btn" title="Unlink Connection">
+                        <i class="fas fa-link-slash"></i>
+                        <span>Unlink</span>
+                    </div>
+                </div>
+
+                <div id="node-toolbar" class="node-toolbar hidden">
+                    <div class="toolbar-section node-duplicate-btn" id="node-duplicate-btn" title="Duplicate Node">
+                        <i class="bi bi-copy"></i>
+                        <span>Duplicate</span>
+                    </div>
+                    <div class="toolbar-divider"></div>
+                    <div class="toolbar-section node-unlink-btn" id="node-unlink-all-btn" title="Unlink All Connections">
+                        <i class="fas fa-link-slash"></i>
+                        <span>Unlink All</span>
+                    </div>
+                    <div class="toolbar-divider"></div>
+                    <div class="toolbar-section node-delete-btn" id="node-delete-btn-toolbar" title="Delete Node">
+                        <i class="fas fa-trash-can"></i>
+                        <span>Delete</span>
+                    </div>
+                </div>
+
+                <div class="settings-container">
+                    <div id="settings-btn" class="settings-btn" title="Canvas Settings">
+                        <i class="bi bi-gear-fill"></i>
+                    </div>
+                    <div id="settings-menu" class="settings-menu hidden">
+                        <div class="menu-group">
+                            <label>Background Pattern</label>
+                            <div class="pattern-options">
+                                <button class="pattern-opt active" data-pattern="plain" title="Plain">None</button>
+                                <button class="pattern-opt" data-pattern="dotted" title="Dotted">Dots</button>
+                                <button class="pattern-opt" data-pattern="grid" title="Grid">Grid</button>
+                                <button class="pattern-opt" data-pattern="criss-cross" title="Criss Cross">Graph</button>
+                            </div>
+                        </div>
+                        <div class="menu-divider"></div>
+                        <div class="menu-group">
+                            <label>Theme</label>
+                            <div class="theme-options">
+                                <button class="theme-opt active" data-theme="none"><i class="bi bi-circle-half"></i> None</button>
+                                <button class="theme-opt" data-theme="dark"><i class="bi bi-moon-stars-fill"></i> Dark</button>
+                                <button class="theme-opt" data-theme="light"><i class="bi bi-sun-fill"></i> Light</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <script nonce="${nonce}" src="${prismJsUri}"></script>
                 <script nonce="${nonce}" src="${scriptUri}"></script>
             </body>

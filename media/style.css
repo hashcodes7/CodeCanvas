@@ -8,10 +8,154 @@ body {
     color: var(--vscode-editor-foreground);
     font-family: var(--vscode-font-family);
     cursor: grab;
+    --pattern-color: rgba(128, 128, 128, 0.2);
+    --pattern-bg: var(--vscode-editor-background);
+}
+
+body.light-mode {
+    --vscode-editor-background: #ffffff;
+    --vscode-editor-foreground: #333333;
+    --vscode-sideBar-border: #dddddd;
+    --vscode-sideBarSectionHeader-background: #f3f3f3;
+    --vscode-sideBarSectionHeader-foreground: #616161;
+    --vscode-widget-border: #d5d5d5;
+    --pattern-color: rgba(0, 0, 0, 0.1);
+    background-color: #ffffff;
+    color: #333333;
+}
+
+body.dark-mode {
+    --vscode-editor-background: #1e1e1e;
+    --vscode-editor-foreground: #cccccc;
+    --vscode-sideBar-border: #3c3c3c;
+    --vscode-sideBarSectionHeader-background: #333333;
+    --vscode-sideBarSectionHeader-foreground: #cccccc;
+    --vscode-widget-border: #454545;
+    --pattern-color: rgba(255, 255, 255, 0.1);
+    background-color: #1e1e1e;
+    color: #cccccc;
+}
+
+body.pattern-dotted {
+    background-image: radial-gradient(var(--pattern-color) 1.5px, transparent 1.5px);
+    background-size: 30px 30px;
+}
+
+body.pattern-grid {
+    background-image:
+        linear-gradient(var(--pattern-color) 1px, transparent 1px),
+        linear-gradient(90deg, var(--pattern-color) 1px, transparent 1px);
+    background-size: 30px 30px;
+}
+
+body.pattern-criss-cross {
+    background-image:
+        linear-gradient(var(--pattern-color) 1px, transparent 1px),
+        linear-gradient(90deg, var(--pattern-color) 1px, transparent 1px),
+        linear-gradient(rgba(128, 128, 128, 0.05) 0.5px, transparent 0.5px),
+        linear-gradient(90deg, rgba(128, 128, 128, 0.05) 0.5px, transparent 0.5px);
+    background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
 }
 
 body.grabbing {
     cursor: grabbing;
+}
+
+.settings-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 3000;
+}
+
+.settings-btn {
+    width: 36px;
+    height: 36px;
+    background: var(--vscode-sideBarSectionHeader-background);
+    border: 1px solid var(--vscode-widget-border);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 18px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s, background 0.2s;
+}
+
+.settings-btn:hover {
+    background: var(--vscode-list-hoverBackground);
+    transform: rotate(45deg);
+}
+
+.settings-menu {
+    position: absolute;
+    top: 45px;
+    right: 0;
+    width: 220px;
+    background: var(--vscode-sideBarSectionHeader-background);
+    border: 1px solid var(--vscode-widget-border);
+    border-radius: 12px;
+    padding: 15px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.settings-menu.hidden {
+    display: none;
+}
+
+.menu-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.menu-group label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    opacity: 0.6;
+    letter-spacing: 0.5px;
+}
+
+.pattern-options,
+.theme-options {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+}
+
+.pattern-opt,
+.theme-opt {
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.pattern-opt:hover,
+.theme-opt:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.pattern-opt.active,
+.theme-opt.active {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border-color: var(--vscode-focusBorder);
+}
+
+.menu-divider {
+    height: 1px;
+    background: var(--vscode-widget-border);
+    margin: 4px 0;
 }
 
 #canvas-container {
@@ -183,12 +327,17 @@ body.grabbing {
     transition: all 0.15s ease;
 }
 
-.code-editor [data-handle-id]:hover {
+.code-editor [data-handle-id]:hover,
+body.linking-active .code-editor [data-handle-id] {
     background: rgba(100, 149, 237, 0.2);
     border-color: rgba(100, 149, 237, 0.6);
     box-shadow: 0 0 0 1px rgba(100, 149, 237, 0.2);
     z-index: 10;
     position: relative;
+}
+
+.temp-connection {
+    pointer-events: none !important;
 }
 
 /* Scrollbar styling for a premium look */
@@ -232,5 +381,144 @@ svg path {
     fill: none;
     stroke: var(--vscode-textLink-activeForeground);
     stroke-width: 2px;
-    pointer-events: none;
+    pointer-events: stroke;
+    cursor: pointer;
+    transition: stroke 0.2s, stroke-width 0.2s;
+}
+
+svg path:hover {
+    stroke-width: 4px;
+}
+
+svg path.selected {
+    stroke: var(--vscode-focusBorder);
+    stroke-width: 4px;
+    filter: drop-shadow(0 0 5px var(--vscode-focusBorder));
+}
+
+.edge-toolbar,
+.node-toolbar {
+    position: fixed;
+    bottom: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--vscode-sideBarSectionHeader-background);
+    border: 1px solid var(--vscode-widget-border);
+    border-radius: 20px;
+    padding: 6px 15px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    z-index: 2000;
+    user-select: none;
+    pointer-events: auto;
+    transition: opacity 0.2s, transform 0.2s;
+}
+
+.edge-toolbar.hidden,
+.node-toolbar.hidden {
+    display: none;
+}
+
+.toolbar-section {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--vscode-foreground);
+    font-size: 13px;
+}
+
+.toolbar-divider {
+    width: 1px;
+    height: 20px;
+    background: var(--vscode-widget-border);
+}
+
+.color-swatches {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.1s, border-color 0.2s;
+}
+
+.swatch:hover {
+    transform: scale(1.2);
+}
+
+.swatch.active {
+    border-color: var(--vscode-foreground);
+    transform: scale(1.1);
+}
+
+.swatch.default {
+    background-color: var(--vscode-textLink-activeForeground);
+}
+
+.swatch.red {
+    background-color: #ff5f56;
+}
+
+.swatch.green {
+    background-color: #28c840;
+}
+
+.swatch.yellow {
+    background-color: #febc2e;
+}
+
+.swatch.purple {
+    background-color: #af52de;
+}
+
+.swatch.white {
+    background-color: #ffffff;
+}
+
+.unlink-btn,
+.node-unlink-btn,
+.node-duplicate-btn,
+.node-delete-btn {
+    cursor: pointer;
+    padding: 4px 10px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.2s;
+}
+
+.unlink-btn,
+.node-unlink-btn {
+    color: var(--vscode-errorForeground);
+}
+
+.node-delete-btn {
+    color: #ff5f56;
+}
+
+.unlink-btn:hover,
+.node-unlink-btn:hover {
+    background: rgba(255, 0, 0, 0.1);
+}
+
+.node-duplicate-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.node-delete-btn:hover {
+    background: rgba(255, 95, 86, 0.2);
+}
+
+input[type="range"] {
+    accent-color: var(--vscode-button-background);
+    cursor: pointer;
 }

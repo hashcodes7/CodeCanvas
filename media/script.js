@@ -22,6 +22,48 @@ let tempLine = null;
 let linkingNode = null;
 let linkingHandle = null;
 let selectedNode = null;
+let selectedEdge = null;
+
+// Settings State
+let canvasSettings = {
+    pattern: 'plain',
+    theme: 'none'
+};
+
+// Toolbar Elements
+const edgeToolbar = document.getElementById('edge-toolbar');
+const thicknessSlider = document.getElementById('edge-thickness');
+const thicknessLabel = document.getElementById('thickness-label');
+const unlinkBtn = document.getElementById('unlink-btn');
+
+// Node Toolbar Elements
+const nodeToolbar = document.getElementById('node-toolbar');
+const nodeDuplicateBtn = document.getElementById('node-duplicate-btn');
+const nodeUnlinkAllBtn = document.getElementById('node-unlink-all-btn');
+const nodeDeleteBtnToolbar = document.getElementById('node-delete-btn-toolbar');
+
+// Settings Elements
+const settingsBtn = document.getElementById('settings-btn');
+const settingsMenu = document.getElementById('settings-menu');
+const patternOpts = document.querySelectorAll('.pattern-opt');
+const themeOpts = document.querySelectorAll('.theme-opt');
+
+function deleteEdge(edgeId) {
+    const edgeIndex = edges.findIndex(e => e.id === edgeId);
+    if (edgeIndex === -1) return;
+
+    const el = document.getElementById(edgeId);
+    if (el) el.remove();
+
+    edges.splice(edgeIndex, 1);
+
+    if (selectedEdge && selectedEdge.id === edgeId) {
+        selectedEdge = null;
+        edgeToolbar.classList.add('hidden');
+    }
+
+    postState();
+}
 
 function deleteNode(nodeId) {
     const nodeIndex = nodes.findIndex(n => n.id === nodeId);
@@ -62,6 +104,8 @@ window.addEventListener('keydown', (e) => {
 
         if (selectedNode) {
             deleteNode(selectedNode.id);
+        } else if (selectedEdge) {
+            deleteEdge(selectedEdge.id);
         }
     }
 });
@@ -69,15 +113,52 @@ window.addEventListener('keydown', (e) => {
 // Setup infinite canvas
 canvas.addEventListener('mousedown', (e) => {
     // Deselect if clicking canvas
-    if (e.target === canvas || e.target === content) {
-        if (selectedNode) {
-            selectedNode.classList.remove('selected');
-            selectedNode = null;
-        }
+    if (e.target === canvas || e.target === content || e.target === svgLayer) {
+        deselectEverything();
         isPanning = true;
         startX = e.clientX - params.x;
         startY = e.clientY - params.y;
         document.body.classList.add('grabbing');
+    }
+});
+
+function deselectEverything() {
+    if (selectedNode) {
+        selectedNode.classList.remove('selected');
+        selectedNode = null;
+    }
+    if (selectedEdge) {
+        const path = document.getElementById(selectedEdge.id);
+        if (path) path.classList.remove('selected');
+        selectedEdge = null;
+        edgeToolbar.classList.add('hidden');
+    }
+    nodeToolbar.classList.add('hidden');
+}
+
+function selectEdge(edgeId) {
+    deselectEverything();
+    selectedEdge = edges.find(e => e.id === edgeId);
+    if (selectedEdge) {
+        const path = document.getElementById(selectedEdge.id);
+        if (path) path.classList.add('selected');
+
+        thicknessSlider.value = selectedEdge.thickness || 1;
+        thicknessLabel.innerText = `${thicknessSlider.value}px`;
+
+        // Update active swatch
+        document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+        const activeSwatch = document.querySelector(`.swatch[data-color="${selectedEdge.color || 'default'}"]`);
+        if (activeSwatch) activeSwatch.classList.add('active');
+
+        edgeToolbar.classList.remove('hidden');
+    }
+}
+
+svgLayer.addEventListener('mousedown', (e) => {
+    if (e.target.tagName === 'path' && e.target.id !== 'temp-line') {
+        e.stopPropagation();
+        selectEdge(e.target.id);
     }
 });
 
@@ -170,11 +251,10 @@ function createNode(id, title, text, x, y, uri = null) {
             e.stopPropagation();
 
             // Select Node
-            if (selectedNode && selectedNode !== node) {
-                selectedNode.classList.remove('selected');
-            }
+            deselectEverything();
             selectedNode = node;
             node.classList.add('selected');
+            nodeToolbar.classList.remove('hidden');
 
             if (e.target.closest('.node-header')) {
                 draggingNode = node;
@@ -204,6 +284,7 @@ function createNode(id, title, text, x, y, uri = null) {
 
         editor.addEventListener('mousedown', e => {
             e.stopPropagation();
+            deselectEverything();
             // Check if we clicked a handle
             if (e.target.hasAttribute('data-handle-id')) {
                 e.preventDefault(); // Prevent text selection
@@ -443,8 +524,103 @@ function updateEdge(edge) {
         const c2x = x2 - (x2 - x1) / 2;
         const c2y = y2;
         path.setAttribute('d', `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}`);
+
+        // Apply thickness
+        const thickness = edge.thickness || 1;
+        path.style.strokeWidth = thickness + 'px';
+
+        // Apply color
+        if (edge.color && edge.color !== 'default') {
+            path.style.stroke = edge.color;
+        } else {
+            path.style.stroke = ''; // Reset to default CSS stroke
+        }
     }
 }
+
+// Toolbar Interactions
+document.querySelectorAll('.swatch').forEach(swatch => {
+    swatch.addEventListener('click', () => {
+        if (selectedEdge) {
+            const color = swatch.dataset.color;
+            selectedEdge.color = color;
+
+            document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+            swatch.classList.add('active');
+
+            updateEdge(selectedEdge);
+            postState();
+        }
+    });
+});
+
+function duplicateNode(nodeId) {
+    const original = nodes.find(n => n.id === nodeId);
+    if (!original) return;
+
+    const id = 'node-' + Date.now() + Math.random().toString(36).substr(2, 9);
+    const title = original.querySelector('.node-title').innerText;
+    const text = original.querySelector('.code-editor').innerText;
+    const uri = original.dataset.uri;
+    const x = parseFloat(original.style.left) + 40;
+    const y = parseFloat(original.style.top) + 40;
+
+    createNode(id, title, text, x, y, uri);
+    if (uri) vscode.postMessage({ command: 'requestSymbols', uri: uri, nodeId: id });
+
+    // Select the new node
+    const newNode = document.getElementById(id);
+    if (newNode) {
+        deselectEverything();
+        selectedNode = newNode;
+        newNode.classList.add('selected');
+        nodeToolbar.classList.remove('hidden');
+    }
+
+    postState();
+}
+
+function unlinkNodeLinks(nodeId) {
+    edges = edges.filter(edge => {
+        if (edge.from === nodeId || edge.to === nodeId) {
+            const el = document.getElementById(edge.id);
+            if (el) el.remove();
+            return false;
+        }
+        return true;
+    });
+    postState();
+}
+
+nodeDuplicateBtn.addEventListener('click', () => {
+    if (selectedNode) duplicateNode(selectedNode.id);
+});
+
+nodeUnlinkAllBtn.addEventListener('click', () => {
+    if (selectedNode) unlinkNodeLinks(selectedNode.id);
+});
+
+nodeDeleteBtnToolbar.addEventListener('click', () => {
+    if (selectedNode) deleteNode(selectedNode.id);
+});
+
+thicknessSlider.addEventListener('input', (e) => {
+    if (selectedEdge) {
+        selectedEdge.thickness = parseFloat(e.target.value);
+        thicknessLabel.innerText = `${selectedEdge.thickness}px`;
+        updateEdge(selectedEdge);
+    }
+});
+
+thicknessSlider.addEventListener('change', () => {
+    postState();
+});
+
+unlinkBtn.addEventListener('click', () => {
+    if (selectedEdge) {
+        deleteEdge(selectedEdge.id);
+    }
+});
 
 function updateConnections() {
     edges.forEach(updateEdge);
@@ -501,6 +677,7 @@ window.addEventListener('mouseup', (e) => {
         tempLine = null;
         linkingNode = null;
         linkingHandle = null;
+        document.body.classList.remove('linking-active');
     }
 });
 
@@ -508,16 +685,10 @@ document.addEventListener('mousedown', (e) => {
     const handle = e.target.closest('[data-handle-id]');
     if (handle) {
         e.stopPropagation();
+        e.preventDefault();
         const node = handle.closest('.node');
-        linkingNode = node;
-        linkingHandle = handle.dataset.handleId;
-
-        tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        tempLine.setAttribute('stroke', 'var(--vscode-textLink-activeForeground)');
-        tempLine.setAttribute('stroke-width', '2');
-        tempLine.setAttribute('fill', 'none');
-        tempLine.style.strokeDasharray = '5,5';
-        svgLayer.appendChild(tempLine);
+        const handleId = handle.dataset.handleId;
+        startLinking(node, handleId, e);
     }
 });
 
@@ -551,7 +722,8 @@ function getState() {
             x: parseFloat(n.style.left),
             y: parseFloat(n.style.top)
         })),
-        edges
+        edges,
+        settings: canvasSettings
     };
 }
 
@@ -595,6 +767,12 @@ function restoreStateFixed(state) {
             svgLayer.appendChild(path);
             updateEdge(e);
         });
+    }
+
+    if (state.settings) {
+        canvasSettings = state.settings;
+        applyPattern(canvasSettings.pattern);
+        applyTheme(canvasSettings.theme);
     }
 }
 
@@ -725,12 +903,15 @@ function disableEditMode(editor) {
 function startLinking(node, handleId, event) {
     linkingNode = node;
     linkingHandle = handleId;
+    document.body.classList.add('linking-active');
 
     tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     tempLine.setAttribute('class', 'temp-connection');
-    tempLine.setAttribute('stroke', '#007acc');
+    tempLine.setAttribute('stroke', 'var(--vscode-textLink-activeForeground)');
     tempLine.setAttribute('stroke-width', '2');
     tempLine.setAttribute('fill', 'none');
+    tempLine.style.pointerEvents = 'none';
+    tempLine.style.strokeDasharray = '5,5';
     svgLayer.appendChild(tempLine);
 
     // Initial draw
@@ -738,6 +919,55 @@ function startLinking(node, handleId, event) {
     const mouseY = (event.clientY - params.y) / scale;
     const p1 = getHandleCenter(node, handleId);
 
-    // Just a straight line or point initially
     tempLine.setAttribute('d', `M ${p1.x} ${p1.y} L ${mouseX} ${mouseY}`);
 }
+
+// Settings Logic
+function applyPattern(pattern) {
+    canvasSettings.pattern = pattern;
+    document.body.classList.remove('pattern-plain', 'pattern-dotted', 'pattern-grid', 'pattern-criss-cross');
+    if (pattern !== 'plain') {
+        document.body.classList.add(`pattern-${pattern}`);
+    }
+    patternOpts.forEach(opt => {
+        opt.classList.toggle('active', opt.dataset.pattern === pattern);
+    });
+}
+
+function applyTheme(theme) {
+    canvasSettings.theme = theme;
+    document.body.classList.remove('light-mode', 'dark-mode');
+    if (theme && theme !== 'none') {
+        document.body.classList.add(`${theme}-mode`);
+    }
+    themeOpts.forEach(opt => {
+        opt.classList.toggle('active', opt.dataset.theme === theme);
+    });
+}
+
+settingsBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    settingsMenu.classList.toggle('hidden');
+});
+
+document.addEventListener('click', (e) => {
+    if (!settingsContainer.contains(e.target)) {
+        settingsMenu.classList.add('hidden');
+    }
+});
+
+patternOpts.forEach(opt => {
+    opt.addEventListener('click', () => {
+        applyPattern(opt.dataset.pattern);
+        postState();
+    });
+});
+
+themeOpts.forEach(opt => {
+    opt.addEventListener('click', () => {
+        applyTheme(opt.dataset.theme);
+        postState();
+    });
+});
+
+const settingsContainer = document.querySelector('.settings-container');
