@@ -245,7 +245,12 @@ function createNode(id, title, text, x, y, uri = null, width = 350, height = 300
             </div>
             <div class="node-content-wrapper">
                 <div class="editor-container">
+<<<<<<< HEAD
                     <pre class="code-editor" contenteditable="false" spellcheck="false"></pre>
+=======
+                    <div class="line-numbers"></div>
+                    <pre class="code-editor language-none" contenteditable="false" spellcheck="false"></pre>
+>>>>>>> criss-cross-exp
                 </div>
             </div>
             <div class="handle handle-left" data-handle-id="left"></div>
@@ -473,7 +478,9 @@ function restoreSelection(containerEl, savedSel) {
 }
 
 function updateNodeDisplay(node, text, highlight = true) {
+    if (text === undefined || text === null) text = '';
     const editor = node.querySelector('.code-editor');
+    const lineNumbers = node.querySelector('.line-numbers');
     const lang = node.dataset.language || 'none';
 
     // update class for Prism
@@ -487,6 +494,10 @@ function updateNodeDisplay(node, text, highlight = true) {
         const lines = highlighted.split(/\r?\n/);
         editor.innerHTML = lines.map(line => `<span class="line">${line || ' '}</span>`).join('');
 
+        // Update line numbers
+        const lines = text.split('\n');
+        lineNumbers.innerHTML = lines.map((_, i) => `<span>${i + 1}</span>`).join('');
+
         // After highlighting, activate handles
         if (nodeSymbols[node.id]) {
             activateSymbols(node, nodeSymbols[node.id]);
@@ -494,6 +505,8 @@ function updateNodeDisplay(node, text, highlight = true) {
         addGenericHandlesToCode(editor);
     } else {
         editor.innerText = text;
+        const lines = text.split('\n');
+        lineNumbers.innerHTML = lines.map((_, i) => `<span>${i + 1}</span>`).join('');
     }
 }
 

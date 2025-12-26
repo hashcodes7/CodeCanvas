@@ -353,13 +353,36 @@ body.grabbing {
     height: 100%;
     overflow: auto;
     background: transparent;
+    display: flex;
+}
+
+.line-numbers {
+    padding: 10px 5px;
+    border-right: 1px solid var(--vscode-widget-border);
+    background: var(--vscode-editor-background);
+    color: var(--vscode-editorLineNumber-foreground, #858585);
+    font-family: var(--vscode-editor-font-family, 'Consolas', 'Monaco', monospace);
+    font-size: 13px;
+    line-height: 1.5;
+    text-align: right;
+    min-width: 30px;
+    user-select: none;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    position: sticky;
+    left: 0;
+    z-index: 5;
+}
+
+.line-numbers span {
+    display: block;
 }
 
 /* Code Editor - Single Layer ContentEditable */
 .code-editor {
     display: block;
-    width: 100%;
-    min-height: 100%;
+    flex: 1;
     margin: 0;
     padding: 10px;
     box-sizing: border-box;
