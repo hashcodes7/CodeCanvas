@@ -13,9 +13,14 @@ let startY = 0;
 let lastStateString = '';
 let nodeSymbols = {}; // nodeId -> symbol list
 let nodes = [];
-let draggingNode = null;
 let nodeOffsetX = 0;
 let nodeOffsetY = 0;
+
+let resizingNode = null;
+let resizeStartX = 0;
+let resizeStartY = 0;
+let resizeStartWidth = 0;
+let resizeStartHeight = 0;
 
 let edges = [];
 let tempLine = null;
@@ -27,17 +32,23 @@ let selectedEdge = null;
 // Settings State
 let canvasSettings = {
     pattern: 'plain',
-    theme: 'none'
+    theme: 'none',
+    codeTheme: 'default'
 };
 
-// Toolbar Elements
-const edgeToolbar = document.getElementById('edge-toolbar');
+// Toolbox Elements
+const toolbox = document.getElementById('toolbox');
+const edgeControls = document.getElementById('edge-controls');
+const nodeControls = document.getElementById('node-controls');
+const addNodeBtn = document.getElementById('add-node-btn');
+
 const thicknessSlider = document.getElementById('edge-thickness');
 const thicknessLabel = document.getElementById('thickness-label');
 const unlinkBtn = document.getElementById('unlink-btn');
 
-// Node Toolbar Elements
-const nodeToolbar = document.getElementById('node-toolbar');
+const fontSizeSlider = document.getElementById('node-font-size');
+const fontSizeLabel = document.getElementById('font-size-label');
+
 const nodeDuplicateBtn = document.getElementById('node-duplicate-btn');
 const nodeUnlinkAllBtn = document.getElementById('node-unlink-all-btn');
 const nodeDeleteBtnToolbar = document.getElementById('node-delete-btn-toolbar');
@@ -47,6 +58,14 @@ const settingsBtn = document.getElementById('settings-btn');
 const settingsMenu = document.getElementById('settings-menu');
 const patternOpts = document.querySelectorAll('.pattern-opt');
 const themeOpts = document.querySelectorAll('.theme-opt');
+const codeThemeOpts = document.querySelectorAll('.code-theme-opt');
+
+// Share Elements
+const shareBtn = document.getElementById('share-btn');
+const shareMenu = document.getElementById('share-menu');
+const exportJsonBtn = document.getElementById('export-json-btn');
+const exportPdfBtn = document.getElementById('export-pdf-btn');
+const shareContainer = document.querySelector('.share-container');
 
 function deleteEdge(edgeId) {
     const edgeIndex = edges.findIndex(e => e.id === edgeId);
@@ -59,7 +78,7 @@ function deleteEdge(edgeId) {
 
     if (selectedEdge && selectedEdge.id === edgeId) {
         selectedEdge = null;
-        edgeToolbar.classList.add('hidden');
+        edgeControls.classList.add('hidden');
     }
 
     postState();
@@ -131,9 +150,9 @@ function deselectEverything() {
         const path = document.getElementById(selectedEdge.id);
         if (path) path.classList.remove('selected');
         selectedEdge = null;
-        edgeToolbar.classList.add('hidden');
     }
-    nodeToolbar.classList.add('hidden');
+    edgeControls.classList.add('hidden');
+    nodeControls.classList.add('hidden');
 }
 
 function selectEdge(edgeId) {
@@ -151,7 +170,8 @@ function selectEdge(edgeId) {
         const activeSwatch = document.querySelector(`.swatch[data-color="${selectedEdge.color || 'default'}"]`);
         if (activeSwatch) activeSwatch.classList.add('active');
 
-        edgeToolbar.classList.remove('hidden');
+        edgeControls.classList.remove('hidden');
+        nodeControls.classList.add('hidden');
     }
 }
 
@@ -200,7 +220,7 @@ canvas.addEventListener('wheel', (e) => {
 });
 
 // Logic for Nodes
-function createNode(id, title, text, x, y, uri = null) {
+function createNode(id, title, text, x, y, uri = null, width = 350, height = 300) {
     let node = document.getElementById(id);
     const isNew = !node;
 
@@ -225,11 +245,12 @@ function createNode(id, title, text, x, y, uri = null) {
             </div>
             <div class="node-content-wrapper">
                 <div class="editor-container">
-                    <pre class="code-editor language-none" contenteditable="false" spellcheck="false"></pre>
+                    <pre class="code-editor" contenteditable="false" spellcheck="false"></pre>
                 </div>
             </div>
             <div class="handle handle-left" data-handle-id="left"></div>
             <div class="handle handle-right" data-handle-id="right"></div>
+            <div class="resize-handle"></div>
         `;
         content.appendChild(node);
         nodes.push(node);
@@ -254,7 +275,14 @@ function createNode(id, title, text, x, y, uri = null) {
             deselectEverything();
             selectedNode = node;
             node.classList.add('selected');
-            nodeToolbar.classList.remove('hidden');
+
+            // Update font size slider
+            const currentSize = node.style.getPropertyValue('--node-font-size').replace('px', '') || 13;
+            fontSizeSlider.value = currentSize;
+            fontSizeLabel.innerText = `${currentSize}px`;
+
+            nodeControls.classList.remove('hidden');
+            edgeControls.classList.add('hidden');
 
             if (e.target.closest('.node-header')) {
                 draggingNode = node;
@@ -278,6 +306,18 @@ function createNode(id, title, text, x, y, uri = null) {
                 const handleId = handle.dataset.handleId;
                 startLinking(node, handleId, e);
             });
+        });
+
+        // Resize Handling
+        const resizeHandle = node.querySelector('.resize-handle');
+        resizeHandle.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            resizingNode = node;
+            resizeStartX = e.clientX;
+            resizeStartY = e.clientY;
+            resizeStartWidth = parseFloat(node.style.width) || node.offsetWidth;
+            resizeStartHeight = parseFloat(node.style.height) || node.offsetHeight;
         });
 
         const editor = node.querySelector('.code-editor');
@@ -324,6 +364,8 @@ function createNode(id, title, text, x, y, uri = null) {
 
     node.style.left = `${x}px`;
     node.style.top = `${y}px`;
+    node.style.width = `${width}px`;
+    node.style.height = `${height}px`;
     if (uri) {
         node.dataset.uri = uri;
         const ext = uri.split('.').pop();
@@ -440,7 +482,10 @@ function updateNodeDisplay(node, text, highlight = true) {
     if (window.Prism) { // Using standard Prism highlights string
         const grammar = Prism.languages[lang] || Prism.languages.plaintext;
         const highlighted = Prism.highlight(text, grammar, lang);
-        editor.innerHTML = highlighted + '<br>'; // Trailing BR for editing at end
+
+        // Wrap each line in a span for numbering
+        const lines = highlighted.split(/\r?\n/);
+        editor.innerHTML = lines.map(line => `<span class="line">${line || ' '}</span>`).join('');
 
         // After highlighting, activate handles
         if (nodeSymbols[node.id]) {
@@ -452,27 +497,6 @@ function updateNodeDisplay(node, text, highlight = true) {
     }
 }
 
-function addGenericHandlesToCode(codeElement) {
-    // Only wrap direct text nodes inside the code element (not already in a token span)
-    const walker = document.createTreeWalker(codeElement, NodeFilter.SHOW_TEXT, null, false);
-    let nodesToReplace = [];
-    let node;
-    while (node = walker.nextNode()) {
-        if (node.parentElement === codeElement && node.textContent.trim()) {
-            nodesToReplace.push(node);
-        }
-    }
-
-    nodesToReplace.forEach(textNode => {
-        const span = document.createElement('span');
-        const content = textNode.textContent;
-        span.innerHTML = content.split(/(\s+)/).map(part => {
-            if (/\s+/.test(part)) return part;
-            return `<span class="word-handle" data-handle-id="word-${part}-${Math.random().toString(36).substr(2, 5)}">${part}</span>`;
-        }).join('');
-        textNode.replaceWith(...span.childNodes);
-    });
-}
 
 function getHandleCenter(node, handleId) {
     const handle = node.querySelector(`[data-handle-id="${handleId}"]`);
@@ -564,8 +588,10 @@ function duplicateNode(nodeId) {
     const uri = original.dataset.uri;
     const x = parseFloat(original.style.left) + 40;
     const y = parseFloat(original.style.top) + 40;
+    const width = parseFloat(original.style.width) || 350;
+    const height = parseFloat(original.style.height) || 300;
 
-    createNode(id, title, text, x, y, uri);
+    createNode(id, title, text, x, y, uri, width, height);
     if (uri) vscode.postMessage({ command: 'requestSymbols', uri: uri, nodeId: id });
 
     // Select the new node
@@ -574,7 +600,13 @@ function duplicateNode(nodeId) {
         deselectEverything();
         selectedNode = newNode;
         newNode.classList.add('selected');
-        nodeToolbar.classList.remove('hidden');
+
+        const currentSize = newNode.style.getPropertyValue('--node-font-size').replace('px', '') || 13;
+        fontSizeSlider.value = currentSize;
+        fontSizeLabel.innerText = `${currentSize}px`;
+
+        nodeControls.classList.remove('hidden');
+        edgeControls.classList.add('hidden');
     }
 
     postState();
@@ -612,7 +644,26 @@ thicknessSlider.addEventListener('input', (e) => {
     }
 });
 
+thicknessSlider.addEventListener('input', () => {
+    thicknessLabel.innerText = `${thicknessSlider.value}px`;
+    if (selectedEdge) {
+        selectedEdge.thickness = parseFloat(thicknessSlider.value);
+        updateEdge(selectedEdge);
+    }
+});
 thicknessSlider.addEventListener('change', () => {
+    postState();
+});
+
+fontSizeSlider.addEventListener('input', () => {
+    const size = fontSizeSlider.value;
+    fontSizeLabel.innerText = `${size}px`;
+    if (selectedNode) {
+        selectedNode.style.setProperty('--node-font-size', `${size}px`);
+        updateConnections(); // Resizing text might change connections? Usually not but safe
+    }
+});
+fontSizeSlider.addEventListener('change', () => {
     postState();
 });
 
@@ -636,6 +687,12 @@ window.addEventListener('mousemove', (e) => {
         const mouseY = (e.clientY - params.y) / scale;
         draggingNode.style.left = `${mouseX - nodeOffsetX}px`;
         draggingNode.style.top = `${mouseY - nodeOffsetY}px`;
+        updateConnections();
+    } else if (resizingNode) {
+        const dx = (e.clientX - resizeStartX) / scale;
+        const dy = (e.clientY - resizeStartY) / scale;
+        resizingNode.style.width = `${resizeStartWidth + dx}px`;
+        resizingNode.style.height = `${resizeStartHeight + dy}px`;
         updateConnections();
     } else if (linkingNode && tempLine) {
         const mouseX = (e.clientX - params.x) / scale;
@@ -662,6 +719,9 @@ window.addEventListener('mouseup', (e) => {
         postState();
     } else if (draggingNode) {
         draggingNode = null;
+        postState();
+    } else if (resizingNode) {
+        resizingNode = null;
         postState();
     } else if (linkingNode && tempLine) {
         const targetHandle = e.target.closest('[data-handle-id]');
@@ -720,7 +780,10 @@ function getState() {
             uri: n.dataset.uri,
             text: n.querySelector('.code-editor').innerText, // FIXED: removed .value check
             x: parseFloat(n.style.left),
-            y: parseFloat(n.style.top)
+            y: parseFloat(n.style.top),
+            width: parseFloat(n.style.width),
+            height: parseFloat(n.style.height),
+            fontSize: n.style.getPropertyValue('--node-font-size') || '13px'
         })),
         edges,
         settings: canvasSettings
@@ -748,7 +811,8 @@ function restoreStateFixed(state) {
 
     if (state.nodes) {
         state.nodes.forEach(n => {
-            createNode(n.id, n.title, n.text, n.x, n.y, n.uri);
+            const node = createNode(n.id, n.title, n.text, n.x, n.y, n.uri, n.width, n.height);
+            if (n.fontSize) node.style.setProperty('--node-font-size', n.fontSize);
             if (n.uri && !document.getElementById(n.id).dataset.loaded) {
                 vscode.postMessage({ command: 'requestNodeContent', uri: n.uri, nodeId: n.id });
                 vscode.postMessage({ command: 'requestSymbols', uri: n.uri, nodeId: n.id });
@@ -773,6 +837,7 @@ function restoreStateFixed(state) {
         canvasSettings = state.settings;
         applyPattern(canvasSettings.pattern);
         applyTheme(canvasSettings.theme);
+        applyCodeTheme(canvasSettings.codeTheme || 'default');
     }
 }
 
@@ -987,3 +1052,140 @@ themeOpts.forEach(opt => {
 });
 
 const settingsContainer = document.querySelector('.settings-container');
+
+// Code Theme Logic
+function applyCodeTheme(theme) {
+    canvasSettings.codeTheme = theme || 'default';
+    const prismThemeLink = document.getElementById('prism-theme');
+    if (prismThemeLink) {
+        const baseUrl = prismThemeLink.href.replace(/prism[^/]*\.css$/, '');
+        const themeFile = theme === 'default' ? 'prism.css' : `prism-${theme}.css`;
+        prismThemeLink.href = baseUrl + themeFile;
+    }
+    codeThemeOpts.forEach(opt => {
+        opt.classList.toggle('active', opt.dataset.codeTheme === theme);
+    });
+}
+
+codeThemeOpts.forEach(opt => {
+    opt.addEventListener('click', () => {
+        applyCodeTheme(opt.dataset.codeTheme);
+        postState();
+    });
+});
+
+// Share / Export Logic
+shareBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    shareMenu.classList.toggle('hidden');
+});
+
+addNodeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const id = 'node-' + Date.now() + Math.random().toString(36).substr(2, 9);
+    // Add it near the center of the current view
+    const x = (-params.x + window.innerWidth / 2 - 175) / scale;
+    const y = (-params.y + window.innerHeight / 2 - 150) / scale;
+
+    const node = createNode(id, 'Text Block', 'Enter your text here...', x, y, null);
+
+    deselectEverything();
+    selectedNode = node;
+    node.classList.add('selected');
+    nodeControls.classList.remove('hidden');
+    edgeControls.classList.add('hidden');
+
+    postState();
+});
+
+document.addEventListener('click', (e) => {
+    if (shareContainer && !shareContainer.contains(e.target)) {
+        shareMenu.classList.add('hidden');
+    }
+});
+
+exportJsonBtn.addEventListener('click', () => {
+    const state = getState();
+    vscode.postMessage({
+        command: 'exportJson',
+        value: state
+    });
+    shareMenu.classList.add('hidden');
+});
+
+exportPdfBtn.addEventListener('click', async () => {
+    shareMenu.classList.add('hidden');
+
+    // Show a loading indicator if possible, but for now just proceed
+    const canvasContent = document.getElementById('canvas-content');
+
+    // Temporarily hide UI elements that shouldn't be in the PDF (though they are outside canvas-content)
+    // We want to capture the bounding box of all nodes
+    if (nodes.length === 0) {
+        vscode.postMessage({ command: 'alert', text: 'Canvas is empty!' });
+        return;
+    }
+
+    // Calculate bounding box of all nodes
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    nodes.forEach(node => {
+        const x = parseFloat(node.style.left);
+        const y = parseFloat(node.style.top);
+        const w = parseFloat(node.style.width);
+        const h = parseFloat(node.style.height);
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x + w);
+        maxY = Math.max(maxY, y + h);
+    });
+
+    // Add padding
+    const padding = 50;
+    const width = (maxX - minX) + padding * 2;
+    const height = (maxY - minY) + padding * 2;
+
+    try {
+        // Use html2canvas to capture the canvas-content
+        // We need to handle the scale. html2canvas works best if we render at scale 1.
+        const originalTransform = canvasContent.style.transform;
+        const originalParams = { ...params };
+        const originalScale = scale;
+
+        // Reset transform for clean capture
+        canvasContent.style.transform = 'none';
+
+        const canvas = await html2canvas(canvasContent, {
+            backgroundColor: getComputedStyle(document.body).backgroundColor,
+            x: minX - padding,
+            y: minY - padding,
+            width: width,
+            height: height,
+            scale: 2, // Higher quality
+            useCORS: true,
+            logging: false
+        });
+
+        // Restore transform
+        canvasContent.style.transform = originalTransform;
+
+        const imgData = canvas.toDataURL('image/png');
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({
+            orientation: width > height ? 'l' : 'p',
+            unit: 'px',
+            format: [width, height]
+        });
+
+        pdf.addImage(imgData, 'PNG', 0, 0, width, height);
+        const pdfBase64 = pdf.output('datauristring');
+
+        vscode.postMessage({
+            command: 'exportPdf',
+            value: pdfBase64
+        });
+
+    } catch (err) {
+        console.error('PDF Export failed:', err);
+        vscode.postMessage({ command: 'alert', text: 'PDF Export failed: ' + err.message });
+    }
+});

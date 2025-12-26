@@ -20,9 +20,7 @@ pre[class*=language-] {
 }
 
 pre[class*=language-] {
-    padding: 0;
-    margin: 0;
-    overflow: visible;
+    background: transparent;
 }
 
 :not(pre)>code[class*=language-],

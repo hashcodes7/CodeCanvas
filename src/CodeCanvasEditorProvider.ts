@@ -82,6 +82,12 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
                 case 'saveFileContent':
                     this._handleSaveFile(e.uri, e.content);
                     return;
+                case 'exportJson':
+                    this._handleExportJson(document.uri, e.value);
+                    return;
+                case 'exportPdf':
+                    this._handleExportPdf(document.uri, e.value);
+                    return;
                 case 'alert':
                     vscode.window.showErrorMessage(e.text);
                     return;
@@ -104,11 +110,13 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline' https:; font-src https:; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} https:; connect-src ${webview.cspSource} https:;">
+                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline' https:; font-src https:; script-src 'nonce-${nonce}' https: 'unsafe-eval'; img-src ${webview.cspSource} https: data:; connect-src ${webview.cspSource} https:;">
                 <link href="${styleUri}" rel="stylesheet">
-                <link href="${prismCssUri}" rel="stylesheet">
+                <link id="prism-theme" href="${prismCssUri}" rel="stylesheet">
                 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
                 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+                <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+                <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
                 <title>CodeCanvas</title>
             </head>
             <body>
@@ -118,14 +126,19 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
                     </div>
                 </div>
 
-                <div id="edge-toolbar" class="edge-toolbar hidden">
-                    <div class="toolbar-section">
+                <div id="toolbox" class="toolbox">
+                    <div class="toolbox-section main-section">
+                        <div id="add-node-btn" class="add-node-btn" title="Add Text Block">
+                            <i class="bi bi-plus-lg"></i>
+                        </div>
+                    </div>
+                    
+                    <div id="edge-controls" class="toolbox-section edge-controls hidden">
+                        <div class="toolbar-divider"></div>
                         <i class="bi bi-distribute-vertical" title="Thickness"></i>
                         <input type="range" id="edge-thickness" min="0.5" max="10" step="0.5" value="1">
                         <span id="thickness-label">1px</span>
-                    </div>
-                    <div class="toolbar-divider"></div>
-                    <div class="toolbar-section">
+                        <div class="toolbar-divider"></div>
                         <i class="bi bi-palette" title="Color"></i>
                         <div class="color-swatches">
                             <div class="swatch default active" data-color="default" title="Default Color"></div>
@@ -135,28 +148,33 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
                             <div class="swatch purple" data-color="#af52de" title="Purple"></div>
                             <div class="swatch white" data-color="#ffffff" title="White"></div>
                         </div>
-                    </div>  
-                    <div class="toolbar-divider"></div>
-                    <div class="toolbar-section unlink-btn" id="unlink-btn" title="Unlink Connection">
-                        <i class="fas fa-link-slash"></i>
-                        <span>Unlink</span>
+                        <div class="toolbar-divider"></div>
+                        <div class="unlink-btn" id="unlink-btn" title="Unlink Connection">
+                            <i class="fas fa-link-slash"></i>
+                            <span>Unlink</span>
+                        </div>
                     </div>
-                </div>
 
-                <div id="node-toolbar" class="node-toolbar hidden">
-                    <div class="toolbar-section node-duplicate-btn" id="node-duplicate-btn" title="Duplicate Node">
-                        <i class="bi bi-copy"></i>
-                        <span>Duplicate</span>
-                    </div>
-                    <div class="toolbar-divider"></div>
-                    <div class="toolbar-section node-unlink-btn" id="node-unlink-all-btn" title="Unlink All Connections">
-                        <i class="fas fa-link-slash"></i>
-                        <span>Unlink All</span>
-                    </div>
-                    <div class="toolbar-divider"></div>
-                    <div class="toolbar-section node-delete-btn" id="node-delete-btn-toolbar" title="Delete Node">
-                        <i class="fas fa-trash-can"></i>
-                        <span>Delete</span>
+                    <div id="node-controls" class="toolbox-section node-controls hidden">
+                        <div class="toolbar-divider"></div>
+                        <i class="bi bi-type" title="Font Size"></i>
+                        <input type="range" id="node-font-size" min="8" max="24" step="1" value="13">
+                        <span id="font-size-label">13px</span>
+                        <div class="toolbar-divider"></div>
+                        <div class="node-duplicate-btn" id="node-duplicate-btn" title="Duplicate Node">
+                            <i class="bi bi-copy"></i>
+                            <span>Duplicate</span>
+                        </div>
+                        <div class="toolbar-divider"></div>
+                        <div class="node-unlink-btn" id="node-unlink-all-btn" title="Unlink All Connections">
+                            <i class="fas fa-link-slash"></i>
+                            <span>Unlink All</span>
+                        </div>
+                        <div class="toolbar-divider"></div>
+                        <div class="node-delete-btn" id="node-delete-btn-toolbar" title="Delete Node">
+                            <i class="fas fa-trash-can"></i>
+                            <span>Delete</span>
+                        </div>
                     </div>
                 </div>
 
@@ -182,6 +200,34 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
                                 <button class="theme-opt" data-theme="dark"><i class="bi bi-moon-stars-fill"></i> Dark</button>
                                 <button class="theme-opt" data-theme="light"><i class="bi bi-sun-fill"></i> Light</button>
                             </div>
+                        </div>
+                        <div class="menu-divider"></div>
+                        <div class="menu-group">
+                            <label>Code Theme</label>
+                            <div class="code-theme-options">
+                                <button class="code-theme-opt active" data-code-theme="default">Default</button>
+                                <button class="code-theme-opt" data-code-theme="okaidia">Okaidia</button>
+                                <button class="code-theme-opt" data-code-theme="tomorrow">Tomorrow</button>
+                                <button class="code-theme-opt" data-code-theme="solarizedlight">Solarized</button>
+                                <button class="code-theme-opt" data-code-theme="twilight">Twilight</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="share-container">
+                    <div id="share-btn" class="share-btn" title="Share / Export">
+                        <i class="bi bi-share-fill"></i>
+                    </div>
+                    <div id="share-menu" class="share-menu hidden">
+                        <div class="menu-group">
+                            <label>Export Canvas</label>
+                            <button class="share-opt" id="export-json-btn">
+                                <i class="bi bi-filetype-json"></i> Export as JSON
+                            </button>
+                            <button class="share-opt" id="export-pdf-btn">
+                                <i class="bi bi-file-pdf"></i> Export as PDF
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -289,6 +335,29 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
             await vscode.workspace.fs.writeFile(uri, data);
         } catch (e) {
             vscode.window.showErrorMessage('Failed to save file: ' + uriString);
+        }
+    }
+
+    private async _handleExportJson(baseUri: vscode.Uri, json: any) {
+        try {
+            const exportUri = baseUri.with({ path: baseUri.path.replace(/\.codecanvas$/, '.export.json') });
+            const data = Buffer.from(JSON.stringify(json, null, 2), 'utf8');
+            await vscode.workspace.fs.writeFile(exportUri, data);
+            vscode.window.showInformationMessage('Canvas exported as JSON: ' + vscode.workspace.asRelativePath(exportUri));
+        } catch (e) {
+            vscode.window.showErrorMessage('Failed to export JSON: ' + e);
+        }
+    }
+
+    private async _handleExportPdf(baseUri: vscode.Uri, dataUri: string) {
+        try {
+            const exportUri = baseUri.with({ path: baseUri.path.replace(/\.codecanvas$/, '.pdf') });
+            const base64Data = dataUri.split(',')[1];
+            const data = Buffer.from(base64Data, 'base64');
+            await vscode.workspace.fs.writeFile(exportUri, data);
+            vscode.window.showInformationMessage('Canvas exported as PDF: ' + vscode.workspace.asRelativePath(exportUri));
+        } catch (e) {
+            vscode.window.showErrorMessage('Failed to export PDF: ' + e);
         }
     }
 }
