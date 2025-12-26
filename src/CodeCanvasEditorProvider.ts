@@ -4,7 +4,15 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
 
     public static register(context: vscode.ExtensionContext): vscode.Disposable {
         const provider = new CodeCanvasEditorProvider(context);
-        const providerRegistration = vscode.window.registerCustomEditorProvider(CodeCanvasEditorProvider.viewType, provider);
+        const providerRegistration = vscode.window.registerCustomEditorProvider(
+            CodeCanvasEditorProvider.viewType,
+            provider,
+            {
+                webviewOptions: {
+                    retainContextWhenHidden: true,
+                }
+            }
+        );
         return providerRegistration;
     }
 
@@ -22,7 +30,8 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
         // Setup initial content for the webview
         webviewPanel.webview.options = {
             enableScripts: true,
-            localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'media')]
+            localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'media')],
+            enableForms: true
         };
 
         webviewPanel.webview.html = this.getHtmlForWebview(webviewPanel.webview);
@@ -162,7 +171,7 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
                                 <button class="pattern-opt active" data-pattern="plain" title="Plain">None</button>
                                 <button class="pattern-opt" data-pattern="dotted" title="Dotted">Dots</button>
                                 <button class="pattern-opt" data-pattern="grid" title="Grid">Grid</button>
-                                <button class="pattern-opt" data-pattern="criss-cross" title="Criss Cross">Graph</button>
+                                <button class="pattern-opt" data-pattern="criss-cross" title="Criss Cross">Diagonal</button>
                             </div>
                         </div>
                         <div class="menu-divider"></div>

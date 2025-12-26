@@ -837,53 +837,69 @@ function activateSymbols(node, symbols) {
     // Broaden search to ALL tokens to make every colored word a handle
     const tokens = editor.querySelectorAll('.token');
 
-    tokens.forEach(token => {
+    tokens.forEach((token, index) => {
         const name = token.innerText.trim();
         if (!name) return;
 
         // EXCLUSION LIST:
         // Text/Tokens matching specifically these characters (or combinations of them) will NOT be handles.
-        // User List: ()[]{}:;,./|\ and space
-        // Regex logic: matches if string consists ONLY of these characters range.
-        if (/^[\(\)\[\]\{\}:;,.\/\|\\]+$/.test(name)) return;
+        // User List: ()[]{}:;,./|\ and space, plus natural punctuation !?"'
+        if (/^[\(\)\[\]\{\}:;,.\/\|\s\\!?"']+$/.test(name)) return;
 
-        // Check if it's a known symbol from VS Code (for better semantic IDs if possible)
+        // Use stable deterministic handle ID based on token index
         const symbol = (symbols || []).find(s => s.name === name);
         if (symbol) {
-            token.dataset.handleId = `token-${symbol.name}-${Math.random().toString(36).substr(2, 5)}`;
+            token.dataset.handleId = `token-${symbol.name}-${index}`;
         } else {
             // Generic token handle
             if (!token.dataset.handleId) {
-                token.dataset.handleId = `token-any-${name}-${Math.random().toString(36).substr(2, 5)}`;
+                token.dataset.handleId = `token-any-${name}-${index}`;
             }
         }
     });
 }
 
 function addGenericHandlesToCode(codeElement) {
-    // Only wrap direct text nodes inside the code element (not already in a token span)
     const walker = document.createTreeWalker(codeElement, NodeFilter.SHOW_TEXT, null, false);
     let nodesToReplace = [];
     let node;
     while (node = walker.nextNode()) {
-        if (node.parentElement === codeElement && node.textContent.trim()) {
+        if (!node.parentElement.closest('[data-handle-id]') && node.textContent.trim()) {
             nodesToReplace.push(node);
         }
     }
 
-    nodesToReplace.forEach(textNode => {
-        const span = document.createElement('span');
+    // Unified Tokenizer Regex:
+    // Group 1: URLs
+    // Group 2: Separators (Whitespace + Structural + Natural Punctuation)
+    // Group 3: Words (Alphanumeric and others)
+    const tokenRegex = /(https?:\/\/[^\s\(\)\[\]\{\}:;,"'<>]+)|([\(\)\[\]\{\}:;,.\/\|\s\\!?"']+)|([^\(\)\[\]\{\}:;,.\/\|\s\\!?"']+)/gi;
+
+    nodesToReplace.forEach((textNode, textNodeIndex) => {
         const content = textNode.textContent;
-        // Split by whitespace AND user-defined structural punctuation
-        // Explicitly include all items from the exclusion list as separators
-        span.innerHTML = content.split(/([\(\)\[\]\{\}:;,.\/\|\s\\]+)/).map(part => {
-            // Check if part is purely whitespace or exclusion characters
-            if (/^[\(\)\[\]\{\}:;,.\/\|\s\\]+$/.test(part)) return part;
-            // Otherwise it's a word/number/string-part -> Make Handle
-            if (!part.trim()) return part; // Safety
-            return `<span class="word-handle" data-handle-id="word-${part}-${Math.random().toString(36).substr(2, 5)}">${part}</span>`;
-        }).join('');
-        textNode.replaceWith(...span.childNodes);
+        const container = document.createElement('span');
+        let html = '';
+
+        let match;
+        tokenRegex.lastIndex = 0;
+        let tokenIndex = 0;
+
+        while ((match = tokenRegex.exec(content)) !== null) {
+            const [full, url, sep, word] = match;
+            if (url) {
+                html += `<span class="word-handle" data-handle-id="url-${textNodeIndex}-${tokenIndex}">${url}</span>`;
+            } else if (sep) {
+                html += sep;
+            } else if (word) {
+                html += `<span class="word-handle" data-handle-id="word-${word}-${textNodeIndex}-${tokenIndex}">${word}</span>`;
+            }
+            tokenIndex++;
+        }
+
+        if (html) {
+            container.innerHTML = html;
+            textNode.replaceWith(...container.childNodes);
+        }
     });
 }
 
