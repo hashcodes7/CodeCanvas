@@ -417,16 +417,52 @@ body.linking-active .code-editor [data-handle-id] {
     z-index: 3;
 }
 
-.handle-right {
-    right: -5px;
-    top: 50%;
+.handle-left-1 {
+    left: -5px;
+    top: 33%;
     transform: translateY(-50%);
 }
 
-.handle-left {
+.handle-left-2 {
     left: -5px;
-    top: 50%;
+    top: 66%;
     transform: translateY(-50%);
+}
+
+.handle-right-1 {
+    right: -5px;
+    top: 33%;
+    transform: translateY(-50%);
+}
+
+.handle-right-2 {
+    right: -5px;
+    top: 66%;
+    transform: translateY(-50%);
+}
+
+.handle-top-1 {
+    top: -5px;
+    left: 33%;
+    transform: translateX(-50%);
+}
+
+.handle-top-2 {
+    top: -5px;
+    left: 66%;
+    transform: translateX(-50%);
+}
+
+.handle-bottom-1 {
+    bottom: -5px;
+    left: 33%;
+    transform: translateX(-50%);
+}
+
+.handle-bottom-2 {
+    bottom: -5px;
+    left: 66%;
+    transform: translateX(-50%);
 }
 
 svg path {
