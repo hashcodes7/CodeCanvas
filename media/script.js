@@ -279,14 +279,8 @@ function createNode(id, title, text, x, y, uri = null, type = 'textnode', width 
                     </div>
                 `}
             </div>
-            <div class="handle handle-left-1" data-handle-id="left-1"></div>
-            <div class="handle handle-left-2" data-handle-id="left-2"></div>
-            <div class="handle handle-right-1" data-handle-id="right-1"></div>
-            <div class="handle handle-right-2" data-handle-id="right-2"></div>
-            <div class="handle handle-top-1" data-handle-id="top-1"></div>
-            <div class="handle handle-top-2" data-handle-id="top-2"></div>
-            <div class="handle handle-bottom-1" data-handle-id="bottom-1"></div>
-            <div class="handle handle-bottom-2" data-handle-id="bottom-2"></div>
+            <div class="handle handle-left" data-handle-id="left"></div>
+            <div class="handle handle-right" data-handle-id="right"></div>
             <div class="resize-handle"></div>
         `;
 
