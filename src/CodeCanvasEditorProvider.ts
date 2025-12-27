@@ -110,7 +110,7 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline' https:; font-src https:; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} https:; connect-src ${webview.cspSource} https:;">
+                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline' https:; font-src https:; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} https:; connect-src ${webview.cspSource} https:; frame-src https:;">
                 <link href="${styleUri}" rel="stylesheet">
                 <link id="prism-theme-style" href="${prismDefaultUri}" rel="stylesheet">
                 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
@@ -137,6 +137,9 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
                     <div id="global-tools" class="toolbar-section">
                         <div class="toolbar-btn" id="add-text-btn" title="Add Text Block">
                             <i class="bi bi-plus-lg"></i>
+                        </div>
+                        <div class="toolbar-btn" id="add-web-btn" title="Add Web View">
+                            <i class="bi bi-paperclip"></i>
                         </div>
                     </div>
 
@@ -256,7 +259,8 @@ export class CodeCanvasEditorProvider implements vscode.CustomTextEditorProvider
                 fileName: fileName,
                 content: content,
                 x: x,
-                y: y
+                y: y,
+                type: 'filenode'
             });
         } catch (e) {
             vscode.window.showErrorMessage('Failed to read file: ' + uriString);

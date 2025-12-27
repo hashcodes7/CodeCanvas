@@ -16,6 +16,9 @@ let nodes = [];
 let draggingNode = null;
 let nodeOffsetX = 0;
 let nodeOffsetY = 0;
+let resizingNode = null;
+let startWidth = 0;
+let startHeight = 0;
 
 let edges = [];
 let tempLine = null;
@@ -42,6 +45,7 @@ const unlinkBtn = document.getElementById('unlink-btn');
 
 // Global Tools
 const addTextBtn = document.getElementById('add-text-btn');
+const addWebBtn = document.getElementById('add-web-btn');
 
 // Node Toolbar Elements
 const nodeDuplicateBtn = document.getElementById('node-duplicate-btn');
@@ -64,7 +68,18 @@ addTextBtn.addEventListener('click', (e) => {
     const cx = ((rect.width / 2) - params.x) / scale - 175; // -half node width
     const cy = ((rect.height / 2) - params.y) / scale - 150; // -half node height
 
-    createNode(id, 'Text Block', 'Enter text...', cx, cy, null);
+    createNode(id, 'Text Block', 'Enter text...', cx, cy, null, 'textnode');
+    postState();
+});
+
+addWebBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const id = 'node-' + Date.now() + Math.random().toString(36).substr(2, 9);
+    const rect = canvas.getBoundingClientRect();
+    const cx = ((rect.width / 2) - params.x) / scale - 175;
+    const cy = ((rect.height / 2) - params.y) / scale - 150;
+
+    createNode(id, 'Web View', '', cx, cy, null, 'iframenode', 350, 450);
     postState();
 });
 
@@ -146,6 +161,10 @@ canvas.addEventListener('mousedown', (e) => {
 function deselectEverything() {
     if (selectedNode) {
         selectedNode.classList.remove('selected');
+        // Handle Iframe Node Rendering on deselection
+        if (selectedNode.dataset.type === 'iframenode') {
+            updateIframeDisplay(selectedNode);
+        }
         selectedNode = null;
     }
     if (selectedEdge) {
@@ -221,13 +240,13 @@ canvas.addEventListener('wheel', (e) => {
 });
 
 // Logic for Nodes
-function createNode(id, title, text, x, y, uri = null) {
+function createNode(id, title, text, x, y, uri = null, type = 'textnode', width = null, height = null) {
     let node = document.getElementById(id);
     const isNew = !node;
 
     if (isNew) {
         node = document.createElement('div');
-        node.className = 'node';
+        node.className = `node ${type === 'iframenode' ? 'web-node' : ''}`;
         node.id = id;
 
         // Determine language for display
@@ -245,16 +264,47 @@ function createNode(id, title, text, x, y, uri = null) {
                 <div class="delete-btn" title="Delete Node">×</div>
             </div>
             <div class="node-content-wrapper">
-                <div class="editor-container">
-                    <div class="line-numbers"></div>
-                    <pre class="code-editor language-none" contenteditable="false" spellcheck="false"></pre>
-                </div>
+                ${type === 'iframenode' ? `
+                    <div class="web-node-wrapper">
+                        <div class="web-input-container">
+                            <textarea class="web-url-textarea" placeholder="Enter URL or <iframe> code...">${text || ''}</textarea>
+                            <div class="web-hint">Press Ctrl+Enter or click away to preview</div>
+                        </div>
+                        <div class="web-iframe-container hidden"></div>
+                    </div>
+                ` : `
+                    <div class="editor-container">
+                        <div class="line-numbers"></div>
+                        <pre class="code-editor language-none" contenteditable="false" spellcheck="false"></pre>
+                    </div>
+                `}
             </div>
-            <div class="handle handle-left" data-handle-id="left"></div>
-            <div class="handle handle-right" data-handle-id="right"></div>
+            <div class="handle handle-left-1" data-handle-id="left-1"></div>
+            <div class="handle handle-left-2" data-handle-id="left-2"></div>
+            <div class="handle handle-right-1" data-handle-id="right-1"></div>
+            <div class="handle handle-right-2" data-handle-id="right-2"></div>
+            <div class="handle handle-top-1" data-handle-id="top-1"></div>
+            <div class="handle handle-top-2" data-handle-id="top-2"></div>
+            <div class="handle handle-bottom-1" data-handle-id="bottom-1"></div>
+            <div class="handle handle-bottom-2" data-handle-id="bottom-2"></div>
+            <div class="resize-handle"></div>
         `;
+
+        node.dataset.type = type;
         content.appendChild(node);
         nodes.push(node);
+
+        if (type === 'iframenode') {
+            const input = node.querySelector('.web-url-textarea');
+
+            input.addEventListener('mousedown', e => e.stopPropagation());
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && e.ctrlKey) {
+                    deselectEverything();
+                }
+            });
+            input.addEventListener('input', () => debounce(() => postState(), 1000, 'postState')());
+        }
 
         const header = node.querySelector('.node-header');
 
@@ -280,7 +330,12 @@ function createNode(id, title, text, x, y, uri = null) {
 
             if (e.target.closest('.node-header')) {
                 draggingNode = node;
+                document.body.classList.add('grabbing');
                 content.appendChild(node); // Bring to front
+
+                if (node.dataset.type === 'iframenode') {
+                    showIframeInput(node);
+                }
 
                 const mouseX = (e.clientX - params.x) / scale;
                 const mouseY = (e.clientY - params.y) / scale;
@@ -302,50 +357,67 @@ function createNode(id, title, text, x, y, uri = null) {
             });
         });
 
-        const editor = node.querySelector('.code-editor');
-
-        editor.addEventListener('mousedown', e => {
+        // Resize Handle Logic
+        const resizeHandle = node.querySelector('.resize-handle');
+        resizeHandle.addEventListener('mousedown', (e) => {
             e.stopPropagation();
-            deselectEverything();
-            // Check if we clicked a handle
-            if (e.target.hasAttribute('data-handle-id')) {
-                e.preventDefault(); // Prevent text selection
-                const handleId = e.target.getAttribute('data-handle-id');
-                startLinking(node, handleId, e);
-                return;
-            }
+            e.preventDefault();
+            resizingNode = node;
+            startX = e.clientX;
+            startY = e.clientY;
+            startWidth = node.offsetWidth;
+            startHeight = node.offsetHeight;
+            document.body.classList.add('grabbing');
+        });
 
-            // If clicking empty area (not a handle) and NOT in edit mode, switch to edit mode
-            if (editor.getAttribute('contenteditable') === 'false') {
-                // Single click on empty area enables edit mode
+        const editor = node.querySelector('.code-editor');
+        if (editor) {
+            editor.addEventListener('mousedown', e => {
+                e.stopPropagation();
+                deselectEverything();
+                // Check if we clicked a handle
+                if (e.target.hasAttribute('data-handle-id')) {
+                    e.preventDefault(); // Prevent text selection
+                    const handleId = e.target.getAttribute('data-handle-id');
+                    startLinking(node, handleId, e);
+                    return;
+                }
+
+                // If clicking empty area (not a handle) and NOT in edit mode, switch to edit mode
+                if (editor.getAttribute('contenteditable') === 'false') {
+                    // Single click on empty area enables edit mode
+                    enableEditMode(editor);
+                }
+            });
+
+            editor.addEventListener('dblclick', (e) => {
                 enableEditMode(editor);
-            }
-        });
+            });
 
-        editor.addEventListener('dblclick', (e) => {
-            enableEditMode(editor);
-        });
+            editor.addEventListener('blur', (e) => {
+                disableEditMode(editor);
+            });
 
-        editor.addEventListener('blur', (e) => {
-            disableEditMode(editor);
-        });
+            // Input handling with cursor preservation
+            editor.addEventListener('input', (e) => {
+                handleInput(node, editor);
+            });
 
-        // Input handling with cursor preservation
-        editor.addEventListener('input', (e) => {
-            handleInput(node, editor);
-        });
-
-        // Prevent default enter behavior to avoid extra divs
-        editor.addEventListener('keydown', (e) => {
-            if (e.key === 'Tab') {
-                e.preventDefault();
-                document.execCommand('insertText', false, '    ');
-            }
-        });
+            // Prevent default enter behavior to avoid extra divs
+            editor.addEventListener('keydown', (e) => {
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    document.execCommand('insertText', false, '    ');
+                }
+            });
+        }
     }
 
     node.style.left = `${x}px`;
     node.style.top = `${y}px`;
+    if (width) node.style.width = width + 'px';
+    if (height) node.style.height = height + 'px';
+
     if (uri) {
         node.dataset.uri = uri;
         const ext = uri.split('.').pop();
@@ -357,14 +429,20 @@ function createNode(id, title, text, x, y, uri = null) {
 
     node.querySelector('.node-title').innerText = title;
 
-    const editor = node.querySelector('.code-editor');
     if (text !== undefined && text !== null) {
-        if (editor.innerText !== text) {
-            editor.innerText = text;
-            updateNodeDisplay(node, text, false);
+        if (type === 'iframenode') {
+            node.querySelector('.web-url-textarea').value = text;
+            updateIframeDisplay(node);
+        } else {
+            const editor = node.querySelector('.code-editor');
+            if (editor && editor.innerText !== text) {
+                editor.innerText = text;
+                updateNodeDisplay(node, text, false);
+            }
         }
     } else if (uri && isNew) {
-        editor.innerText = 'Loading...';
+        const editor = node.querySelector('.code-editor');
+        if (editor) editor.innerText = 'Loading...';
     }
 
     return node;
@@ -407,6 +485,74 @@ function handleInput(node, editor) {
         }, 500, uri + '-save')();
     }
     debounce(() => postState(), 1000, 'postState')();
+}
+
+function showIframeInput(node) {
+    const inputContainer = node.querySelector('.web-input-container');
+    const preview = node.querySelector('.web-iframe-container');
+    const input = node.querySelector('.web-url-textarea');
+    if (inputContainer && preview) {
+        inputContainer.classList.remove('hidden');
+        preview.classList.add('hidden');
+        preview.innerHTML = ''; // Clear iframe
+        if (input) input.focus();
+    }
+}
+
+function updateIframeDisplay(node) {
+    const inputContainer = node.querySelector('.web-input-container');
+    const input = node.querySelector('.web-url-textarea');
+    const preview = node.querySelector('.web-iframe-container');
+    if (!input || !preview) return;
+
+    const val = input.value.trim();
+    if (!val) return;
+
+    inputContainer.classList.add('hidden');
+    preview.classList.remove('hidden');
+
+    // Detect if it's embed code or just raw URL
+    if (val.toLowerCase().includes('<iframe')) {
+        preview.innerHTML = val;
+        const nested = preview.querySelector('iframe');
+        if (nested) {
+            nested.style.border = 'none';
+            // Try to respect provided dimensions
+            let w = nested.getAttribute('width');
+            let h = nested.getAttribute('height');
+
+            // Also check style attribute for dimensions
+            const style = nested.getAttribute('style');
+            if (style) {
+                const wMatch = style.match(/width:\s*(\d+px|\d+%)?|width:\s*(\d+)/i);
+                const hMatch = style.match(/height:\s*(\d+px|\d+%)?|height:\s*(\d+)/i);
+                if (wMatch && !w) w = wMatch[1] || wMatch[2];
+                if (hMatch && !h) h = hMatch[1] || hMatch[2];
+            }
+
+            if (w) {
+                if (w.includes('%')) {
+                    if (!node.style.width) node.style.width = '350px'; // default if % and not set
+                } else {
+                    node.style.width = (parseInt(w) + 2) + 'px';
+                }
+            }
+            if (h) {
+                preview.style.height = h.includes('px') ? h : (isNaN(h) ? h : h + 'px');
+            } else {
+                if (!preview.style.height) preview.style.height = '450px'; // fallback
+            }
+            nested.style.width = '100%';
+            nested.style.height = '100%';
+        }
+    } else {
+        // Assume URL
+        let url = val;
+        if (!url.startsWith('http')) url = 'https://' + url;
+        if (!node.style.height) preview.style.height = '450px';
+        if (!node.style.width) node.style.width = '350px';
+        preview.innerHTML = `<iframe src="${url}" style="width:100%; height:100%; border:none; background: white;"></iframe>`;
+    }
 }
 
 // Cursor management
@@ -593,14 +739,15 @@ function duplicateNode(nodeId) {
     const original = nodes.find(n => n.id === nodeId);
     if (!original) return;
 
-    const id = 'node-' + Date.now() + Math.random().toString(36).substr(2, 9);
-    const title = original.querySelector('.node-title').innerText;
-    const text = original.querySelector('.code-editor').innerText;
+    const type = original.dataset.type;
+    const text = type === 'iframenode' ? original.querySelector('.web-url-textarea').value : original.querySelector('.code-editor').innerText;
     const uri = original.dataset.uri;
+    const title = original.querySelector('.node-title').innerText;
+    const id = 'node-' + Date.now() + Math.random().toString(36).substr(2, 9);
     const x = parseFloat(original.style.left) + 40;
     const y = parseFloat(original.style.top) + 40;
 
-    createNode(id, title, text, x, y, uri);
+    createNode(id, title, text, x, y, uri, type);
     if (uri) vscode.postMessage({ command: 'requestSymbols', uri: uri, nodeId: id });
 
     // Select the new node
@@ -687,16 +834,22 @@ window.addEventListener('mousemove', (e) => {
         const c2x = x2 - (x2 - x1) / 2;
         const c2y = y2;
         tempLine.setAttribute('d', `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}`);
+    } else if (resizingNode) {
+        const dx = (e.clientX - startX) / scale;
+        const dy = (e.clientY - startY) / scale;
+        resizingNode.style.width = `${startWidth + dx}px`;
+        resizingNode.style.height = `${startHeight + dy}px`;
+        updateConnections();
     }
 });
 
+
 window.addEventListener('mouseup', (e) => {
-    if (isPanning) {
+    if (isPanning || draggingNode || resizingNode) {
         isPanning = false;
-        document.body.classList.remove('grabbing');
-        postState();
-    } else if (draggingNode) {
         draggingNode = null;
+        resizingNode = null;
+        document.body.classList.remove('grabbing');
         postState();
     } else if (linkingNode && tempLine) {
         const targetHandle = e.target.closest('[data-handle-id]');
@@ -749,14 +902,20 @@ function getState() {
         version: 3,
         params,
         scale,
-        nodes: nodes.map(n => ({
-            id: n.id,
-            title: n.querySelector('.node-title').innerText,
-            uri: n.dataset.uri,
-            text: n.querySelector('.code-editor').innerText, // FIXED: removed .value check
-            x: parseFloat(n.style.left),
-            y: parseFloat(n.style.top)
-        })),
+        nodes: nodes.map(n => {
+            const type = n.dataset.type;
+            return {
+                id: n.id,
+                title: n.querySelector('.node-title').innerText,
+                uri: n.dataset.uri,
+                text: type === 'iframenode' ? n.querySelector('.web-url-textarea').value : n.querySelector('.code-editor').innerText,
+                x: parseFloat(n.style.left),
+                y: parseFloat(n.style.top),
+                width: parseFloat(n.style.width) || null,
+                height: parseFloat(n.style.height) || null,
+                type: type
+            };
+        }),
         edges,
         settings: canvasSettings
     };
@@ -783,7 +942,7 @@ function restoreStateFixed(state) {
 
     if (state.nodes) {
         state.nodes.forEach(n => {
-            createNode(n.id, n.title, n.text, n.x, n.y, n.uri);
+            createNode(n.id, n.title, n.text, n.x, n.y, n.uri, n.type || 'textnode', n.width, n.height);
             if (n.uri && !document.getElementById(n.id).dataset.loaded) {
                 vscode.postMessage({ command: 'requestNodeContent', uri: n.uri, nodeId: n.id });
                 vscode.postMessage({ command: 'requestSymbols', uri: n.uri, nodeId: n.id });
@@ -825,7 +984,7 @@ window.addEventListener('message', event => {
     switch (message.command) {
         case 'addNode':
             const id = 'node-' + Date.now() + Math.random().toString(36).substr(2, 9);
-            createNode(id, message.fileName, message.content, message.x, message.y, message.uri);
+            createNode(id, message.fileName, message.content, message.x, message.y, message.uri, message.type || 'filenode');
             document.getElementById(id).dataset.loaded = 'true';
             if (message.uri) vscode.postMessage({ command: 'requestSymbols', uri: message.uri, nodeId: id });
             postState();
